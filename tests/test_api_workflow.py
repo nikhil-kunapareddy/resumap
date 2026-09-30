@@ -11,7 +11,6 @@ import re
 import pdfplumber
 import pytest
 
-from app import db
 from app.pdfgen import LAYOUT_DEFAULTS
 from tests.conftest import upload
 from tests.fakes import EXPERIENCE_TEXT, INVENTED_TERM, REPLACED_TEXT, tailored
@@ -478,15 +477,15 @@ def test_status_reports_the_live_backend(client):
     assert status["first_name"] == "resume"
 
 
-def test_a_backend_is_tested_with_a_real_call_before_it_is_saved(client, fake):
+def test_a_backend_is_tested_with_a_real_call_before_it_is_saved(client, fake, store):
     r = client.post("/api/backends", json={"backend": "claude_code", "model": "claude-opus-5-5"})
     assert r.status_code == 200 and r.json()["backend"] == "claude_code"
-    assert db.get_setting("backend") == "claude_code"
+    assert store.settings.get("backend") == "claude_code"
 
     fake.respond("Ping", None)
     r = client.post("/api/backends", json={"backend": "codex"})
     assert r.status_code == 400 and r.json()["detail"].startswith("Not switched")
-    assert db.get_setting("backend") == "claude_code"
+    assert store.settings.get("backend") == "claude_code"
 
 
 @pytest.mark.parametrize("payload", [{"backend": "gemini"},

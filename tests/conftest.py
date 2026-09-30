@@ -31,7 +31,8 @@ os.environ.update({
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import backends, db, main  # noqa: E402
+from app import backends, main  # noqa: E402
+from app.storage import Database, Store  # noqa: E402
 from tests.fakes import FakeBackend  # noqa: E402
 from tests.fixtures import resumes  # noqa: E402
 
@@ -48,14 +49,24 @@ def resume_files(tmp_path_factory) -> dict[str, Path]:
 
 @pytest.fixture
 def storage(tmp_path, monkeypatch) -> Path:
-    """A fresh SQLite file plus upload and export folders for one test."""
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "resumap.db")
+    """A fresh SQLite file plus upload and export folders for one test.
+
+    The app builds its Store from ``main.DB_PATH`` at startup, so pointing
+    that at the test's folder is all a TestClient needs.
+    """
+    monkeypatch.setattr(main, "DB_PATH", tmp_path / "resumap.db")
     for name in ("UPLOAD_DIR", "EXPORT_DIR"):
         folder = tmp_path / name.split("_")[0].lower()
         folder.mkdir()
         monkeypatch.setattr(main, name, folder)
-    db.init()
+    Database(tmp_path / "resumap.db").init()
     return tmp_path
+
+
+@pytest.fixture
+def store(storage) -> Store:
+    """A Store over the test's database: the same file the app writes to."""
+    return Store(Database(storage / "resumap.db"))
 
 
 @pytest.fixture

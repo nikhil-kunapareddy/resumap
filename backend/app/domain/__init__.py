@@ -5,14 +5,18 @@ backends and the renderer depend on this package, never the other way round.
 """
 from .enums import (INCLUDED_STATUSES, BlockKind, BoxMode, ChatRole, ExperienceKind,
                     JDCategory, Justify, OutreachKind, RewriteMode, RewriteStatus)
-from .models import (Block, ChatMessage, Experience, JDPoint, Job, Layout, LineGeometry,
-                     OutreachDraft, OutreachExample, OutreachMeta, PageGeometry, Resume,
-                     ResumeDoc, Rewrite, RewriteMeta, Run, StoredBlock, Substitution)
+from .keys import experience_id, experience_key
+from .models import (Block, ChatMessage, Experience, JDPoint, Job, JobSummary, Layout,
+                     LineGeometry, OutreachDraft, OutreachExample, OutreachMeta, PageGeometry,
+                     Resume, ResumeDoc, ResumeSummary, Rewrite, RewriteMeta, Run, StoredBlock,
+                     Substitution)
 
 __all__ = [
     "INCLUDED_STATUSES", "BlockKind", "BoxMode", "ChatRole", "ExperienceKind", "JDCategory",
     "Justify", "OutreachKind", "RewriteMode", "RewriteStatus",
-    "Block", "ChatMessage", "Experience", "JDPoint", "Job", "Layout", "LineGeometry",
-    "OutreachDraft", "OutreachExample", "OutreachMeta", "PageGeometry", "Resume",
-    "ResumeDoc", "Rewrite", "RewriteMeta", "Run", "StoredBlock", "Substitution",
+    "experience_id", "experience_key",
+    "Block", "ChatMessage", "Experience", "JDPoint", "Job", "JobSummary", "Layout",
+    "LineGeometry", "OutreachDraft", "OutreachExample", "OutreachMeta", "PageGeometry",
+    "Resume", "ResumeDoc", "ResumeSummary", "Rewrite", "RewriteMeta", "Run", "StoredBlock",
+    "Substitution",
 ]

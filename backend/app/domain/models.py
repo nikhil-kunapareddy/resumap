@@ -10,8 +10,9 @@ Two kinds of model live here:
   an older or newer version still loads, and keys this version does not know
   pass through untouched instead of being dropped on the next save.
 
-Most of the app still passes these shapes around as plain dicts; the models
-are the contract those dicts meet, enforced where data crosses the API.
+The storage layer hands these models out and the routes work with them. The
+parser, renderer and prompt builders still take the plain-dict form the
+models serialise to (``ResumeDoc.as_dict()`` for the resume).
 """
 from __future__ import annotations
 
@@ -109,6 +110,10 @@ class ResumeDoc(Document):
     blocks: list[StoredBlock]
     sections: list[str] = Field(default_factory=list)
 
+    def as_dict(self) -> dict[str, Any]:
+        """The blob exactly as stored: the form the parser writes and the renderer reads."""
+        return self.model_dump(by_alias=True, mode="json")
+
 
 class Resume(Entity):
     id: int
@@ -118,6 +123,17 @@ class Resume(Entity):
     person_name: str = ""
     created_at: float
     doc: ResumeDoc
+
+
+class ResumeSummary(Entity):
+    """A resume in the list view, without its document."""
+
+    id: int
+    label: str
+    filename: str
+    person_name: str
+    created_at: float
+    job_count: int
 
 
 # -- jobs and what hangs off them -------------------------------------------
@@ -141,6 +157,20 @@ class Job(Entity):
     mode: RewriteMode = RewriteMode.AGGRESSIVE
     created_at: float
     points: list[JDPoint]
+
+    def summary(self) -> JobSummary:
+        return JobSummary.model_validate(self.model_dump(include=set(JobSummary.model_fields)))
+
+
+class JobSummary(Entity):
+    """A job in the list view, without its posting and points."""
+
+    id: int
+    resume_id: int
+    company: str
+    role: str
+    mode: RewriteMode
+    created_at: float
 
 
 class Substitution(Document):
@@ -173,6 +203,11 @@ class Rewrite(Entity):
     status: RewriteStatus
     meta: RewriteMeta = Field(default_factory=RewriteMeta)
     updated_at: float
+
+    @property
+    def in_export(self) -> bool:
+        """Whether this wording replaces the source's in the exported PDF."""
+        return self.status.included and bool(self.rewritten.strip())
 
 
 class Layout(Entity):

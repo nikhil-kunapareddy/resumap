@@ -12,7 +12,7 @@ import pytest
 from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
-from app import claude, db, main
+from app import claude, main
 from app.domain import (INCLUDED_STATUSES, ChatMessage, Experience, ExperienceKind,
                         JDCategory, Job, Justify, Layout, OutreachDraft, OutreachExample,
                         OutreachKind, Resume, ResumeDoc, Rewrite, RewriteMode, RewriteStatus,
@@ -77,7 +77,7 @@ def test_a_parsed_resume_round_trips_through_the_model_unchanged(resume_files, f
     assert ResumeDoc.model_validate(doc).model_dump(by_alias=True) == doc
 
 
-def test_every_stored_row_fits_its_entity(client, fake, resume, job):
+def test_every_stored_row_fits_its_entity(client, fake, store, resume, job):
     exp = client.post("/api/experiences", json={"kind": "project", "text": "Wrote a Go CLI "
                                                 "that lints Airflow DAGs before deploy."}).json()
     for box, point in (("bul005", "jd01"), (exp["key"], "jd04")):
@@ -91,20 +91,18 @@ def test_every_stored_row_fits_its_entity(client, fake, resume, job):
                                  "layout": [{"setting": "font_size", "value": 95}]})
     client.post(f"/api/jobs/{job['id']}/chat", json={"message": "Smaller type"})
 
-    Resume.model_validate(db.get_resume(resume["id"]))
-    Job.model_validate(db.get_job(job["id"]))
-    for rw in db.get_rewrites(job["id"]).values():
-        Rewrite.model_validate(rw)
-    OutreachDraft.model_validate(db.get_outreach(job["id"]))
-    for e in db.list_experiences():
-        Experience.model_validate(e)
-    for e in db.list_outreach_examples():
-        OutreachExample.model_validate(e)
-    messages = db.get_chat(job["id"])
-    assert len(messages) == 2
-    for m in messages:
-        ChatMessage.model_validate(m)
-    Layout.model_validate(db.get_layout(job["id"]))
+    # Repositories validate every row they read, so reading each one back is
+    # the check; the isinstance asserts only confirm what came back.
+    assert isinstance(store.resumes.get(resume["id"]), Resume)
+    assert isinstance(store.jobs.get(job["id"]), Job)
+    rewrites = store.rewrites.for_job(job["id"])
+    assert len(rewrites) == 2 and all(isinstance(rw, Rewrite) for rw in rewrites.values())
+    assert isinstance(store.outreach.get(job["id"]), OutreachDraft)
+    assert all(isinstance(e, Experience) for e in store.experiences.all())
+    assert all(isinstance(e, OutreachExample) for e in store.examples.all())
+    messages = store.chat.for_job(job["id"])
+    assert len(messages) == 2 and all(isinstance(m, ChatMessage) for m in messages)
+    Layout.model_validate(store.layouts.get(job["id"]))
 
 
 def test_entities_reject_unknown_fields_and_documents_keep_them():

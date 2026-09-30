@@ -7,6 +7,8 @@ batch or the state already saved.
 """
 from __future__ import annotations
 
+import pytest
+
 from tests.conftest import upload
 from tests.fixtures.resumes import JOB_DESCRIPTION, JOB_POINTS
 
@@ -93,3 +95,27 @@ def test_a_failing_test_call_reports_why(client, fake):
     fake.respond("Ping", unauthorised)
     r = client.post("/api/backends/api/test")
     assert r.json() == {"ok": False, "detail": "401 Unauthorized", "ms": None}
+
+
+def test_a_correction_that_fails_to_save_leaves_nothing_half_applied(client, fake, job,
+                                                                     monkeypatch):
+    """The edits, the layout and the chat turns are one transaction."""
+    from app.storage import ChatRepository
+
+    fake.respond("PdfRevision", {
+        "reply": "Done.", "justify": "unchanged",
+        "edits": [{"block_id": "bul007", "text": "Led 4 engineers.", "substitutions": [],
+                   "defensible": True}],
+        "layout": [{"setting": "font_size", "value": 95}],
+    })
+
+    def disk_full(*args, **kwargs):
+        raise OSError("disk full")
+    with monkeypatch.context() as m:
+        m.setattr(ChatRepository, "add", disk_full)
+        with pytest.raises(OSError):
+            client.post(f"/api/jobs/{job['id']}/chat", json={"message": "Shorten it"})
+
+    state = client.get(f"/api/jobs/{job['id']}/chat").json()
+    assert (state["rewrites"], state["messages"]) == ({}, [])
+    assert state["layout"]["font"] == 1.0

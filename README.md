@@ -255,7 +255,7 @@ backend/
     api/schemas.py        request bodies and response models (the API contract)
     domain/               enums and models for what is stored; imports nothing else
     config.py             env config, paths
-    db.py                 SQLite storage
+    storage/              SQLite schema, Database, one repository per table group
     claude.py             prompts + schemas: JD parsing, rewriting, outreach
     obs.py                structured logging, cost accounting, prompt archive
     report.py             parse report, export self-check

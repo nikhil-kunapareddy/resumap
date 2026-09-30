@@ -45,11 +45,11 @@ def main() -> None:
 
     sys.path.insert(0, str(BACKEND_DIR))
     from app.claude import backend_status
-    from app.config import BACKEND, HOST, PORT, ensure_dirs
-    from app.db import init
+    from app.config import BACKEND, DB_PATH, HOST, PORT, ensure_dirs
+    from app.storage import Database
 
     ensure_dirs()
-    init()
+    Database(DB_PATH).init()
 
     url = f"http://{HOST}:{PORT}"
     print(f"\n  Resumap  ->  {url}")

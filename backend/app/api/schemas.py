@@ -169,15 +169,6 @@ class PromptsOut(Envelope):
 
 # -- resumes and experiences ------------------------------------------------
 
-class ResumeSummary(Envelope):
-    id: int
-    label: str
-    filename: str
-    person_name: str
-    created_at: float
-    job_count: int
-
-
 class ResumeOut(Envelope):
     """A parsed resume without the source geometry only the renderer needs."""
 
@@ -197,15 +188,6 @@ class ExperienceDeleted(Envelope):
 
 
 # -- jobs, mapping and transform --------------------------------------------
-
-class JobSummary(Envelope):
-    id: int
-    resume_id: int
-    company: str
-    role: str
-    mode: RewriteMode
-    created_at: float
-
 
 class JobCreated(Envelope):
     id: int
