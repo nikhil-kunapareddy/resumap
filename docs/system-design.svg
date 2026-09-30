@@ -142,42 +142,42 @@
 <text x="1160" y="157.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">frontend/app.js, served by FastAPI</text>
 <line x1="1160" y1="172" x2="1160" y2="211" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="228.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /api/resumes</text>
-<text x="1160" y="247.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">file saved to data/uploads</text>
+<text x="1160" y="247.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">ResumeService, file to data/uploads</text>
 <line x1="1160" y1="262" x2="1160" y2="301" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="318.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">parsing/resume.py</text>
 <text x="1160" y="337.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">blocks → resumes.doc_json</text>
 <line x1="1160" y1="352" x2="1160" y2="405" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="422.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /api/jobs</text>
-<text x="1160" y="441.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">raw JD + points → jobs</text>
+<text x="1160" y="441.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">JobService, raw JD + points → jobs</text>
 <line x1="1160" y1="456" x2="1160" y2="495" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="512.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">parsing/jd.py</text>
 <text x="1160" y="531.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">no model call, never rewords</text>
 <line x1="1160" y1="546" x2="1160" y2="599" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
-<text x="1160" y="616.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">claude.parse_jd → backends/</text>
+<text x="1160" y="616.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">ModelGateway.parse_jd</text>
 <text x="1160" y="635.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">claude_code · codex · pi · api</text>
 <line x1="1160" y1="650" x2="1160" y2="729" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="746.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /mappings, /box-modes</text>
 <text x="1160" y="765.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">keyed by block id (bul001, exp012)</text>
 <line x1="1160" y1="780" x2="1160" y2="833" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="850.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /transform</text>
-<text x="1160" y="869.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">claude.rewrite_many, one call per box</text>
+<text x="1160" y="869.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">RewriteService, one call per box</text>
 <line x1="1160" y1="884" x2="1160" y2="945" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
-<text x="1160" y="962.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">claude.py prompts + schemas</text>
+<text x="1160" y="962.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">llm/bullets.py + llm/schemas.py</text>
 <text x="1160" y="981.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">a failed box is marked ok: false</text>
 <line x1="1160" y1="996" x2="1160" y2="1065" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="1082.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">PATCH /rewrites/{block_id}</text>
 <text x="1160" y="1101.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">accepted + edited reach the PDF</text>
 <line x1="1160" y1="1116" x2="1160" y2="1171" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
-<text x="1160" y="1188.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">pdfgen.render_resume</text>
+<text x="1160" y="1188.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">rendering/pdfgen.py</text>
 <text x="1160" y="1207.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">ReportLab, reflows top to bottom</text>
 <line x1="1160" y1="1222" x2="1160" y2="1275" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="1292.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">FIT_LADDER</text>
 <text x="1160" y="1311.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">spacing first, font scale last</text>
 <line x1="1160" y1="1326" x2="1160" y2="1379" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
-<text x="1160" y="1396.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">report.verify_pdf</text>
+<text x="1160" y="1396.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">rendering/selfcheck.py</text>
 <text x="1160" y="1415.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">page count, margins, text layer</text>
 <line x1="1160" y1="1430" x2="1160" y2="1483" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
-<text x="1160" y="1500.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /chat → claude.revise_pdf</text>
+<text x="1160" y="1500.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /chat → gateway.revise_pdf</text>
 <text x="1160" y="1519.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">edits + layouts table, undoable</text>
 <line x1="1160" y1="1534" x2="1160" y2="1587" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="1604.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">POST /export</text>
@@ -187,7 +187,7 @@
 <text x="1160" y="1733.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">quotes the exported PDF only</text>
 <line x1="1160" y1="1748" x2="1160" y2="1787" stroke="#9AA3AF" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="1160" y="1804.0" font-family="'Century Gothic', 'Avenir Next', Avenir, Arial, sans-serif" font-size="14.5" font-weight="bold" fill="#424958" text-anchor="middle" dominant-baseline="central">All state in SQLite</text>
-<text x="1160" y="1823.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">data/resumap.db</text>
+<text x="1160" y="1823.0" font-family="Menlo, 'SF Mono', Consolas, monospace" font-size="11.5" font-weight="normal" fill="#6B7280" text-anchor="middle" dominant-baseline="central">storage/ → data/resumap.db</text>
 <text x="24" y="1904.0" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="bold" fill="#9AA3AF" text-anchor="start" dominant-baseline="central">KEY</text>
 <ellipse cx="112" cy="1906" rx="22" ry="12" fill="#F4CCCB" stroke="#000" stroke-width="1.2"/>
 <text x="144" y="1906.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="normal" fill="#374151" text-anchor="start" dominant-baseline="central">Start / end</text>

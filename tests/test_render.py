@@ -1,4 +1,4 @@
-"""pdfgen.py and report.py: the export mirrors the source and fits one page."""
+"""rendering/: the export mirrors the source, fits one page and passes its self-check."""
 from __future__ import annotations
 
 import copy
@@ -8,10 +8,10 @@ from datetime import date
 import pdfplumber
 import pytest
 
-from app import report
 from app.parsing.resume import parse_resume
-from app.pdfgen import (FIT_LADDER, LAYOUT_DEFAULTS, clean_layout, export_filename,
-                        insert_blocks, line_budget, new_bullet_budget, render_resume)
+from app.rendering.pdfgen import (FIT_LADDER, LAYOUT_DEFAULTS, clean_layout, export_filename,
+                                  insert_blocks, line_budget, new_bullet_budget, render_resume)
+from app.rendering.selfcheck import verify_pdf
 from tests.fixtures.resumes import BULLETS
 
 
@@ -47,7 +47,7 @@ def test_untouched_upload_rerenders_line_for_line_on_one_page(doc, tmp_path):
 def test_untouched_export_passes_the_self_check(doc, resume_files, tmp_path):
     out = tmp_path / "out.pdf"
     render_resume(doc, str(out))
-    check = report.verify_pdf(out, doc, str(resume_files["pdf"]))
+    check = verify_pdf(out, doc, str(resume_files["pdf"]))
     assert check["ok"] is True, check["problems"]
     assert check["pages"] == 1
     assert check["overflow_rows"] == 0

@@ -44,21 +44,22 @@ def main() -> None:
         )
 
     sys.path.insert(0, str(BACKEND_DIR))
-    from app.claude import backend_status
-    from app.config import BACKEND, DB_PATH, HOST, PORT, ensure_dirs
-    from app.storage import Database
+    from app.config import HOST, PORT
+    from app.main import app
 
-    ensure_dirs()
-    Database(DB_PATH).init()
+    services = app.state.services
+    services.paths.ensure()
+    services.store.init()
+    services.settings.apply_saved()
 
     url = f"http://{HOST}:{PORT}"
     print(f"\n  Resumap  ->  {url}")
-    why = backend_status()
+    why = services.gateway.status()
     if why:
-        print(f"  WARNING: the {BACKEND} backend is not ready.")
+        print(f"  WARNING: the {services.gateway.registry.current_name()} backend is not ready.")
         print(f"           {why}")
     else:
-        print(f"  Backend: {BACKEND}")
+        print(f"  Backend: {services.gateway.registry.current_name()}")
     print("  Ctrl-C to stop.\n")
 
     if "--no-browser" not in sys.argv:

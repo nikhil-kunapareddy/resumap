@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
@@ -54,6 +55,20 @@ def api_key() -> str | None:
     return key.strip() if key and key.strip() else None
 
 
-def ensure_dirs() -> None:
-    for d in (DATA_DIR, UPLOAD_DIR, EXPORT_DIR, LOG_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+@dataclass(frozen=True)
+class Paths:
+    """Where one instance keeps its files. The app is handed one, so a test (or a
+    second instance) can point everything at storage of its own."""
+
+    db: Path
+    uploads: Path
+    exports: Path
+    logs: Path
+
+    @classmethod
+    def from_env(cls) -> Paths:
+        return cls(db=DB_PATH, uploads=UPLOAD_DIR, exports=EXPORT_DIR, logs=LOG_DIR)
+
+    def ensure(self) -> None:
+        for d in (self.db.parent, self.uploads, self.exports, self.logs):
+            d.mkdir(parents=True, exist_ok=True)

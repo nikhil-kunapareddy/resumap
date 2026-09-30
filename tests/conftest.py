@@ -1,8 +1,9 @@
 """Shared fixtures: throwaway storage, a scripted backend and a test client.
 
-The environment is set before anything imports ``app.config``, which reads it
-at import time. That keeps every test off the real ``data/`` directory, away
-from the settings in a developer's ``.env``, and away from any real model.
+The app is built with ``create_app(paths, registry)``: its own folder per test,
+and a registry whose every backend name leads to one scripted fake. The
+environment is still set before anything imports ``app.config``, so nothing
+can fall back to the real ``data/`` directory or a developer's ``.env``.
 """
 from __future__ import annotations
 
@@ -31,7 +32,10 @@ os.environ.update({
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import backends, main  # noqa: E402
+from app.config import Paths  # noqa: E402
+from app.llm import BackendRegistry  # noqa: E402
+from app.llm.backends import NAMES  # noqa: E402
+from app.main import create_app  # noqa: E402
 from app.storage import Database, Store  # noqa: E402
 from tests.fakes import FakeBackend  # noqa: E402
 from tests.fixtures import resumes  # noqa: E402
@@ -48,38 +52,36 @@ def resume_files(tmp_path_factory) -> dict[str, Path]:
 
 
 @pytest.fixture
-def storage(tmp_path, monkeypatch) -> Path:
-    """A fresh SQLite file plus upload and export folders for one test.
-
-    The app builds its Store from ``main.DB_PATH`` at startup, so pointing
-    that at the test's folder is all a TestClient needs.
-    """
-    monkeypatch.setattr(main, "DB_PATH", tmp_path / "resumap.db")
-    for name in ("UPLOAD_DIR", "EXPORT_DIR"):
-        folder = tmp_path / name.split("_")[0].lower()
-        folder.mkdir()
-        monkeypatch.setattr(main, name, folder)
-    Database(tmp_path / "resumap.db").init()
-    return tmp_path
+def paths(tmp_path) -> Paths:
+    """A fresh folder of the test's own for the database, uploads, exports and logs."""
+    p = Paths(db=tmp_path / "resumap.db", uploads=tmp_path / "upload",
+              exports=tmp_path / "export", logs=tmp_path / "logs")
+    p.ensure()
+    return p
 
 
 @pytest.fixture
-def store(storage) -> Store:
+def store(paths) -> Store:
     """A Store over the test's database: the same file the app writes to."""
-    return Store(Database(storage / "resumap.db"))
+    s = Store(Database(paths.db))
+    s.init()
+    return s
 
 
 @pytest.fixture
-def fake(monkeypatch) -> FakeBackend:
-    """Route every backend lookup, whatever its name, to one scripted backend."""
-    backend = FakeBackend()
-    monkeypatch.setattr(backends, "get", lambda name=None: backend)
-    return backend
+def fake() -> FakeBackend:
+    return FakeBackend()
 
 
 @pytest.fixture
-def client(storage, fake):
-    with TestClient(main.app) as c:
+def registry(fake) -> BackendRegistry:
+    """Every real backend name, each leading to the one scripted backend."""
+    return BackendRegistry({name: fake for name in NAMES}, selected="api")
+
+
+@pytest.fixture
+def client(paths, registry):
+    with TestClient(create_app(paths, registry)) as c:
         yield c
 
 

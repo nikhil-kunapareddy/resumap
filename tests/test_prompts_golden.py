@@ -13,9 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from app import claude
+from app.llm import bullets, corrections, outreach, tagging
+from app.llm.prompts import PromptStore
 from app.parsing.resume import parse_resume
-from app.pdfgen import clean_layout
+from app.rendering.pdfgen import clean_layout
 from tests.fixtures.resumes import JOB_DESCRIPTION, JOB_POINTS
 
 GOLDEN = Path(__file__).parent / "golden" / "prompts"
@@ -27,11 +28,7 @@ POINTS = [{"id": f"jd{i:02d}", "text": t, "category": "requirement",
 ROLE, COMPANY = "Data Engineer", "Contoso"
 
 
-@pytest.fixture(autouse=True)
-def default_prompts():
-    claude.set_prompt_overrides({})
-    yield
-    claude.set_prompt_overrides({})
+PROMPTS = PromptStore()   # the defaults: no edits
 
 
 @pytest.fixture(scope="module")
@@ -54,21 +51,21 @@ def text_of(doc: dict, block_id: str) -> str:
 
 @pytest.mark.parametrize("mode", ["aggressive", "bridge", "truthful"])
 def test_rewrite(doc, mode):
-    check(f"rewrite_{mode}", *claude.rewrite_request(
-        bullet=text_of(doc, "bul005"), section="EXPERIENCE", jd_points=POINTS[:1],
+    check(f"rewrite_{mode}", *bullets.rewrite_request(
+        PROMPTS, bullet=text_of(doc, "bul005"), section="EXPERIENCE", jd_points=POINTS[:1],
         role=ROLE, company=COMPANY, mode=mode, extra="", max_chars=212))
 
 
 def test_rewrite_with_a_note(doc):
-    check("rewrite_note", *claude.rewrite_request(
-        bullet=text_of(doc, "bul006"), section="EXPERIENCE", jd_points=POINTS[1:3],
+    check("rewrite_note", *bullets.rewrite_request(
+        PROMPTS, bullet=text_of(doc, "bul006"), section="EXPERIENCE", jd_points=POINTS[1:3],
         role=ROLE, company=COMPANY, mode="bridge", extra="Lead with the cost saving.",
         max_chars=105))
 
 
 def test_replace(doc):
-    check("replace", *claude.replace_request(
-        bullet=text_of(doc, "bul006"), section="EXPERIENCE",
+    check("replace", *bullets.replace_request(
+        PROMPTS, bullet=text_of(doc, "bul006"), section="EXPERIENCE",
         entry="Senior Data Engineer, Northwind Analytics (Jan 2021 - Present)",
         siblings=[text_of(doc, "bul005"), text_of(doc, "bul007")], jd_points=POINTS[4:],
         role=ROLE, company=COMPANY, extra="", max_chars=105))
@@ -80,23 +77,23 @@ def test_experience(doc):
                   {"id": "sec011", "kind": "section", "section": "", "text": "PROJECTS"}]
     experience = {"id": 1, "key": "exp001", "kind": "project", "title": "DAG linter",
                   "text": "Wrote a Go CLI that lints Airflow DAGs; 40 stars on GitHub."}
-    check("experience", *claude.experience_request(
-        experience=experience, jd_points=POINTS[3:4], role=ROLE, company=COMPANY,
+    check("experience", *bullets.experience_request(
+        PROMPTS, experience=experience, jd_points=POINTS[3:4], role=ROLE, company=COMPANY,
         placements=placements, examples=[text_of(doc, "bul005")], mode="aggressive",
         extra="", max_chars=208))
 
 
 def test_jd_tagging():
-    check("jd_tags", claude.JD_SYSTEM, claude._tag_prompt(POINTS, JOB_DESCRIPTION))
+    check("jd_tags", tagging.JD_SYSTEM, tagging.tag_prompt(POINTS, JOB_DESCRIPTION))
 
 
 def test_outreach(doc):
     examples = [{"kind": "linkedin", "subject": "", "body": "Hi Alex, loved your talk."},
                 {"kind": "email", "subject": "Thanks", "body": "Hi Alex,\n\nThanks.\n\nJane"}]
-    user = claude._outreach_prompt("Jane Doe", "Sam", ROLE, COMPANY,
-                                   [text_of(doc, "bul005"), text_of(doc, "bul006")],
-                                   POINTS, examples)
-    check("outreach", claude.OUTREACH_SYSTEM, user)
+    user = outreach.outreach_prompt("Jane Doe", "Sam", ROLE, COMPANY,
+                                    [text_of(doc, "bul005"), text_of(doc, "bul006")],
+                                    POINTS, examples)
+    check("outreach", outreach.OUTREACH_SYSTEM, user)
 
 
 def test_corrections_chat(doc):
@@ -106,6 +103,6 @@ def test_corrections_chat(doc):
               for b in doc["blocks"][:6]]
     fit = {"pages": 1, "leading_scale": 1.0, "space_scale": 1.0, "font_scale": 1.0}
     history = [{"role": "user", "text": "Make it fit"}, {"role": "assistant", "text": "Done."}]
-    user = claude._chat_prompt(blocks, clean_layout({"font": 0.95}), fit, doc["geometry"],
-                               ROLE, COMPANY, POINTS, history, "Shorten the first bullet")
-    check("chat", claude.PDF_CHAT_SYSTEM, user)
+    user = corrections.chat_prompt(blocks, clean_layout({"font": 0.95}), fit, doc["geometry"],
+                                   ROLE, COMPANY, POINTS, history, "Shorten the first bullet")
+    check("chat", corrections.PDF_CHAT_SYSTEM, user)

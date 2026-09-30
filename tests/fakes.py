@@ -1,8 +1,7 @@
 """A scripted stand-in for a model backend.
 
-It satisfies the same contract as the modules in ``app/backends`` (``NAME``,
-``LABEL``, ``DEFAULT_MODEL``, ``CONCURRENCY``, ``unavailable()`` and
-``complete()``), so everything above the transport layer runs for real. Each
+It is a ``Backend`` like the real ones in ``app/llm/backends``, so everything
+above the transport layer runs for real. Each
 response schema has a default answer derived from the prompt it was sent; a
 test swaps one in with ``respond()``. Every call is recorded, so a test can
 assert on exactly what was sent.
@@ -14,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from app.backends import Completion, Usage
+from app.llm.backends import Backend, Completion, Usage
 
 Handler = Callable[[str, str], "dict[str, Any] | None"]
 
@@ -116,13 +115,13 @@ DEFAULTS: dict[str, Handler] = {
 }
 
 
-class FakeBackend:
-    NAME = "fake"
-    LABEL = "Fake"
-    DEFAULT_MODEL = "fake-model"
-    CONCURRENCY = 4
+class FakeBackend(Backend):
+    name = "fake"
+    label = "Fake"
+    concurrency = 4
 
     def __init__(self) -> None:
+        super().__init__(default_model="fake-model")
         self.calls: list[Call] = []
         self.handlers: dict[str, Handler] = dict(DEFAULTS)
         # A reason string makes the backend report itself unavailable.

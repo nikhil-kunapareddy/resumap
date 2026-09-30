@@ -11,7 +11,7 @@ import re
 import pdfplumber
 import pytest
 
-from app.pdfgen import LAYOUT_DEFAULTS
+from app.rendering.pdfgen import LAYOUT_DEFAULTS
 from tests.conftest import upload
 from tests.fakes import EXPERIENCE_TEXT, INVENTED_TERM, REPLACED_TEXT, tailored
 from tests.fixtures.resumes import BULLETS, JOB_DESCRIPTION, JOB_POINTS
@@ -89,21 +89,21 @@ def test_upload_rejects_an_unsupported_file_type(client, tmp_path):
     assert r.status_code == 400 and "Unsupported file type" in r.json()["detail"]
 
 
-def test_upload_rejects_a_file_with_no_text_and_keeps_nothing(client, storage, tmp_path):
+def test_upload_rejects_a_file_with_no_text_and_keeps_nothing(client, paths, tmp_path):
     empty = tmp_path / "empty.txt"
     empty.write_text("\n\n")
     with empty.open("rb") as fh:
         r = client.post("/api/resumes", files={"file": (empty.name, fh)})
     assert r.status_code == 400 and "No text found" in r.json()["detail"]
-    assert list((storage / "upload").iterdir()) == []
+    assert list(paths.uploads.iterdir()) == []
     assert client.get("/api/resumes").json() == []
 
 
-def test_deleting_a_resume_removes_its_file_and_jobs(client, storage, resume, job):
+def test_deleting_a_resume_removes_its_file_and_jobs(client, paths, resume, job):
     assert client.delete(f"/api/resumes/{resume['id']}").json() == {"ok": True}
     assert client.get(f"/api/resumes/{resume['id']}").status_code == 404
     assert client.get(f"/api/jobs/{job['id']}").status_code == 404
-    assert list((storage / "upload").iterdir()) == []
+    assert list(paths.uploads.iterdir()) == []
 
 
 # -- job description --------------------------------------------------------

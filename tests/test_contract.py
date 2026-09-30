@@ -12,13 +12,15 @@ import pytest
 from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
-from app import claude, main
+from app.api.routers import ALL as ROUTERS
+from app.llm import EDITABLE_PROMPTS, bullets, outreach, prompts, schemas
+from app.main import create_app
 from app.domain import (INCLUDED_STATUSES, ChatMessage, Experience, ExperienceKind,
                         JDCategory, Job, Justify, Layout, OutreachDraft, OutreachExample,
                         OutreachKind, Resume, ResumeDoc, Rewrite, RewriteMode, RewriteStatus,
                         Run)
 from app.parsing.resume import parse_resume
-from app.pdfgen import LAYOUT_DEFAULTS, clean_layout
+from app.rendering.pdfgen import LAYOUT_DEFAULTS, clean_layout
 
 # Routes that answer with a file or plain text rather than JSON.
 NON_JSON = {"/api/jobs/{job_id}/preview.pdf", "/api/download/{filename}",
@@ -28,7 +30,11 @@ NON_JSON = {"/api/jobs/{job_id}/preview.pdf", "/api/download/{filename}",
 # -- the API contract -------------------------------------------------------
 
 def api_routes() -> list[APIRoute]:
-    return [r for r in main.app.routes if isinstance(r, APIRoute)]
+    return [r for router in ROUTERS for r in router.routes if isinstance(r, APIRoute)]
+
+
+def openapi() -> dict:
+    return create_app().openapi()
 
 
 def test_every_json_route_declares_its_response_model():
@@ -38,7 +44,7 @@ def test_every_json_route_declares_its_response_model():
 
 
 def test_the_openapi_document_describes_every_json_response():
-    spec = main.app.openapi()
+    spec = openapi()
     for route in api_routes():
         if route.path in NON_JSON:
             continue
@@ -49,7 +55,7 @@ def test_the_openapi_document_describes_every_json_response():
 
 
 def test_validation_errors_are_documented_as_the_body_actually_sent():
-    spec = main.app.openapi()
+    spec = openapi()
     op = spec["paths"]["/api/jobs"]["post"]
     ref = op["responses"]["422"]["content"]["application/json"]["schema"]["$ref"]
     assert ref.endswith("/ErrorOut")
@@ -117,18 +123,18 @@ def test_entities_reject_unknown_fields_and_documents_keep_them():
 # -- the enums agree with the constants that use them -----------------------
 
 def test_rewrite_modes_match_the_mode_rules_and_editable_prompts():
-    assert set(claude.MODE_RULES) == set(RewriteMode)
-    modes = {k[5:] for k in claude.EDITABLE_PROMPTS if k.startswith("mode.")}
+    assert set(prompts.MODE_RULES) == set(RewriteMode)
+    modes = {k[5:] for k in EDITABLE_PROMPTS if k.startswith("mode.")}
     assert modes == {m.value for m in RewriteMode}
 
 
 def test_experience_and_outreach_kinds_match_their_labels():
-    assert set(claude.EXPERIENCE_KINDS) == set(ExperienceKind)
-    assert set(claude.OUTREACH_EXAMPLE_KINDS) == set(OutreachKind)
+    assert set(bullets.EXPERIENCE_KINDS) == set(ExperienceKind)
+    assert set(outreach.OUTREACH_EXAMPLE_KINDS) == set(OutreachKind)
 
 
 def test_jd_categories_match_what_the_model_may_answer():
-    category = claude.JDTag.model_fields["category"].annotation
+    category = schemas.JDTag.model_fields["category"].annotation
     assert set(typing.get_args(category)) == {c.value for c in JDCategory}
 
 

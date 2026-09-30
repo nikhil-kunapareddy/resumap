@@ -22,8 +22,8 @@ from typing import NamedTuple
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
-from . import obs
-from .parsing.resume import HARD_EXCLUDE_HINTS
+from .. import obs
+from ..parsing.resume import HARD_EXCLUDE_HINTS
 
 SERIF_HINTS = ("times", "serif", "roman", "georgia", "garamond", "cambria",
                "minion", "book", "palatino", "century")

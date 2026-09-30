@@ -31,8 +31,8 @@ def _rewrite(store: Store, job_id: int, block_id: str = "bul005", text: str = "n
 
 # -- the database -----------------------------------------------------------
 
-def test_init_is_idempotent(storage):
-    db = Database(storage / "resumap.db")
+def test_init_is_idempotent(paths):
+    db = Database(paths.db)
     db.init()
     db.init()
     tables = {r[0] for r in sqlite3.connect(db.path).execute(

@@ -249,30 +249,41 @@ text rather than the picture:
 ```
 run.py                    launcher (re-execs into .venv, opens the browser)
 backend/
-  requirements.txt
+  requirements.txt        runtime dependencies (requirements-dev.txt adds pytest)
   app/
-    main.py               FastAPI routes
-    api/schemas.py        request bodies and response models (the API contract)
-    domain/               enums and models for what is stored; imports nothing else
-    config.py             env config, paths
-    storage/              SQLite schema, Database, one repository per table group
-    claude.py             prompts + schemas: JD parsing, rewriting, outreach
+    main.py               create_app(): wires everything below into one FastAPI app
+    config.py             env config; Paths (where an instance keeps its files)
     obs.py                structured logging, cost accounting, prompt archive
-    report.py             parse report, export self-check
-    pdfgen.py             layout-mirroring PDF renderer
-    backends/
-      anthropic_api.py    the Anthropic API, with a key
-      claude_code.py      the local Claude Code install, via the Agent SDK
+    api/                  HTTP only
+      routers/            one router per area: resumes, jobs, rewrites, export, ...
+      schemas.py          request bodies
+      errors.py           service errors -> status codes; readable 422s
+    services/             every use case, no HTTP: jobs, rewrites, exports, ...
+      results.py          what each service returns (the API's response models)
+    llm/                  model calls
+      gateway.py          ModelGateway: every call, its bookkeeping and checks
+      prompts.py          user-editable instructions and the PromptStore
+      schemas.py          what each call must answer with
+      tagging.py bullets.py outreach.py corrections.py   the message each call sends
+      backends/           claude_code, codex, pi, api; BackendRegistry
+    storage/              SQLite schema, Database, one repository per table group
+    rendering/            pdfgen.py (layout-mirroring renderer), selfcheck.py
     parsing/
       layout.py           PDF/DOCX/TXT -> style-aware lines
       resume.py           lines -> sections, entries, bullets
-      jd.py               heuristic JD splitter (fallback when no backend works)
+      jd.py               verbatim JD splitter: one line, one point
+      report.py           the parse report
+    domain/               enums and models for what is stored; imports nothing else
 frontend/                 browser UI (vanilla JS, no build step)
   index.html  app.js  styles.css
 tests/                    pytest suite: fake backend, generated sample resume
 data/                     SQLite db, uploads, exports  (gitignored)
 .env                      backend choice, model, overrides
 ```
+
+Dependencies point one way: `api` → `services` → `llm`, `storage`,
+`rendering`, `parsing` → `domain`. `tests/test_architecture.py` fails on any
+import that crosses a layer.
 
 The two halves are separate directories but not separate processes: FastAPI
 mounts `frontend/` as static files at `/`, so there is still one server, one
@@ -284,7 +295,7 @@ cd backend && ../.venv/bin/uvicorn app.main:app --reload
 ```
 
 The only paths that cross the line are `FRONTEND_DIR` in `backend/app/config.py`
-and the `app.mount` at the bottom of `backend/app/main.py`. Everything else the
+and the `app.mount` at the end of `create_app` in `backend/app/main.py`. Everything else the
 backend touches (`.env`, `data/`) is addressed from the project root, so a
 future move of either half is a two-line change.
 
