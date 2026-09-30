@@ -1,0 +1,21 @@
+# local environment and secrets
+.venv/
+.env
+.env.*
+!.env.example
+
+# user data: resumes, exports, logs, the SQLite file
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store

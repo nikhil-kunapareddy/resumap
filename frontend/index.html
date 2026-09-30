@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resumap</title>
+<script>
+  // Before first paint, so a dark theme never flashes light. app.js keeps it
+  // in step with the settings panel and, for "system", with the OS.
+  (function () {
+    var t = localStorage.getItem('resumap.theme') || 'system';
+    var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+</script>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128196;</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Resumap</div>
+  <nav class="steps" id="steps">
+    <button class="step" data-step="1"><b>1</b> Resume</button>
+    <button class="step" data-step="2"><b>2</b> Job description</button>
+    <button class="step" data-step="3"><b>3</b> Map</button>
+    <button class="step" data-step="4"><b>4</b> Review</button>
+    <button class="step" data-step="5"><b>5</b> Export</button>
+    <button class="step" data-step="6"><b>6</b> Outreach</button>
+  </nav>
+  <div class="meta">
+    <span id="keyBadge" class="badge">checking…</span>
+    <span class="model" id="modelBadge"></span>
+    <button id="reloadStep" class="gear" title="Reload this step from the server">&#8635; Reload</button>
+    <button id="openSettings" class="gear" title="Model backend and theme" aria-haspopup="dialog">&#9881; Settings</button>
+  </div>
+</header>
+
+<div id="toast" class="toast hidden"></div>
+
+<div id="settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal-card">
+    <div class="row between">
+      <h2 id="settingsTitle">Settings</h2>
+      <button id="closeSettings" class="tiny">Close</button>
+    </div>
+
+    <h3>Model backend</h3>
+    <p class="hint">Who answers job-description tagging, transform, corrections and outreach. Each CLI uses its own sign-in and its plan's limits. Changes save when you click outside this box, after one test call; a switch applies from the next call and nothing already written changes.</p>
+    <div id="backendList"></div>
+    <label class="field" style="margin-top:6px"><span>Model <em id="modelHint"></em></span>
+      <input id="backendModel" spellcheck="false" autocomplete="off">
+    </label>
+    <div class="actions" style="margin-top:10px">
+      <button id="testBackend" title="Makes one tiny real call with the model above">Test</button>
+      <div class="grow"></div>
+      <button id="saveBackend" class="primary">Use this backend</button>
+    </div>
+    <div id="backendMsg" class="msg"></div>
+
+    <h3>Appearance</h3>
+    <div class="seg" id="themeSeg">
+      <button data-theme="light">Light</button>
+      <button data-theme="dark">Dark</button>
+      <button data-theme="system">System</button>
+    </div>
+  </div>
+</div>
+
+<div id="promptDlg" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+  <div class="modal-card wide">
+    <div class="row between">
+      <h2 id="promptTitle">Transform prompt</h2>
+      <button id="closePrompt" class="tiny">Close</button>
+    </div>
+    <p class="hint">For each mapped box, Transform sends these instructions, then a message built from the box and its JD points. Edits save when you click away and apply to every job. The reply format is fixed whatever the instructions say, so an edit changes wording and rules, not what the app can read back.</p>
+    <div class="seg" id="promptTabs">
+      <button data-kind="rewrite">Resume bullets</button>
+      <button data-kind="experience">Experiences</button>
+      <button data-kind="replace">Replaced bullets</button>
+    </div>
+    <div id="promptEditors"></div>
+    <h3>Sent for the selected box</h3>
+    <pre id="promptPreview" class="prompt-preview"></pre>
+  </div>
+</div>
+
+<main>
+  <!-- ── 1. RESUME ───────────────────────────────────────────── -->
+  <section class="panel" data-panel="1">
+    <div class="stack">
+    <div class="col">
+      <h2>Reference resume</h2>
+      <p class="hint">Upload once. It is stored locally and reused for every job you tailor.</p>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".pdf,.docx,.txt,.md" hidden>
+        <strong>Choose a file</strong> or drop it here
+        <small>PDF, DOCX, TXT or MD &middot; text-based PDFs only</small>
+      </label>
+      <div id="uploadMsg" class="msg"></div>
+
+      <h3>Stored resumes</h3>
+      <div id="resumeList" class="list"></div>
+    </div>
+
+    <div class="col">
+      <h2>Experiences <span id="expCount" class="count"></span></h2>
+      <p class="hint">Projects, roles and soft skills that aren’t on your resume. Stored once and offered on the Map step for every job, next to your resume points. A mapped experience becomes a new bullet.</p>
+      <div class="row tight">
+        <label class="field"><span>Type</span>
+          <select id="expKind">
+            <option value="project">Project</option>
+            <option value="work">Work experience</option>
+            <option value="soft_skill">Soft skill</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label class="field grow"><span>Title</span><input id="expTitle" placeholder="optional, e.g. Resumap (personal project)"></label>
+      </div>
+      <label class="field" style="margin-top:10px"><span>What you did</span>
+        <textarea id="expText" rows="4" placeholder="The facts you can stand behind: what you built or did, with which tools, at what scale, and what came of it. Numbers here are the only numbers the model may use."></textarea>
+      </label>
+      <div class="actions" style="margin-top:8px">
+        <button id="addExp" class="primary">Add experience</button>
+      </div>
+      <div id="expMsg" class="msg"></div>
+      <div id="expList" class="list"></div>
+    </div>
+    </div>
+    <div class="col">
+      <h2>Parsed points <span id="blockCount" class="count"></span></h2>
+      <p class="hint">Only accomplishments are listed. Your name, contact line, titles, dates, skills, education and summary are still parsed and still exported — they just aren’t things you map.</p>
+      <div id="resumePreview" class="preview-scroll"></div>
+    </div>
+  </section>
+
+  <!-- ── 2. JD ───────────────────────────────────────────────── -->
+  <section class="panel hidden" data-panel="2">
+    <div class="col">
+      <h2>Paste the job description</h2>
+      <p class="hint">The whole posting. Boilerplate gets stripped automatically.</p>
+      <textarea id="jdText" rows="20" placeholder="Paste the full job description here…"></textarea>
+      <div class="row">
+        <label class="field">
+          <span>Rewrite mode</span>
+          <select id="mode">
+            <option value="aggressive">Aggressive keyword alignment</option>
+            <option value="bridge">Realign + bridge synonyms</option>
+            <option value="truthful">Truthful realign</option>
+          </select>
+        </label>
+        <button id="parseJd" class="primary">Parse job description</button>
+      </div>
+      <p class="hint" id="modeHint"></p>
+      <div id="jdMsg" class="msg"></div>
+    </div>
+    <div class="col">
+      <h2>Extracted points <span id="pointCount" class="count"></span></h2>
+      <div class="row tight">
+        <label class="field grow"><span>Company</span><input id="company" placeholder="company"></label>
+        <label class="field grow"><span>Role</span><input id="role" placeholder="role"></label>
+      </div>
+      <p class="hint">Points are word for word from your paste. Remove any you do not want to map against; Undo puts one back.</p>
+      <p class="hint">Company name drives the export filename.</p>
+      <div id="jdPreview" class="preview-scroll"></div>
+    </div>
+  </section>
+
+  <!-- ── 3. MAP ──────────────────────────────────────────────── -->
+  <section class="panel hidden" data-panel="3">
+    <div class="col">
+      <h2>Resume points <span id="mapPointCount" class="count"></span></h2>
+      <p class="hint">Click a box to select it, then tick the JD points it should answer.</p>
+      <button id="toggleSkipped" class="tiny" style="margin-bottom:10px"></button>
+      <div id="mapBlocks" class="preview-scroll"></div>
+    </div>
+    <div class="col">
+      <h2>Job description points</h2>
+      <p class="hint" id="mapSelected">No resume box selected.</p>
+      <label class="replace-opt hidden" id="replaceOpt">
+        <input type="checkbox" id="replaceBox">
+        <span><b>Replace this bullet</b> Write it from scratch for the ticked points instead of rewording it, even if it is about something else. It keeps its place and length on the page, and every new claim is flagged in Review.</span>
+      </label>
+      <div id="mapPoints" class="preview-scroll"></div>
+      <div class="actions">
+        <span id="mapSummary" class="count"></span>
+        <div class="grow"></div>
+        <button id="viewPrompt" title="See and edit what Transform sends">Prompt…</button>
+        <button id="runTransform" class="primary">Transform mapped boxes</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4. REVIEW ───────────────────────────────────────────── -->
+  <section class="panel hidden wide" data-panel="4">
+    <div class="col full">
+      <div class="row between">
+        <h2>Review rewrites <span id="reviewCount" class="count"></span></h2>
+        <div class="actions">
+          <button id="acceptAll">Accept all pending</button>
+          <button id="toExport" class="primary">Go to export</button>
+        </div>
+      </div>
+      <div id="reviewList" class="preview-scroll tall"></div>
+    </div>
+  </section>
+
+  <!-- ── 5. EXPORT ───────────────────────────────────────────── -->
+  <section class="panel hidden export" data-panel="5">
+    <div class="col">
+      <div class="row between">
+        <h2>Export</h2>
+        <div class="actions">
+          <label class="field"><span>Filename prefix</span><input id="firstName" size="10"></label>
+          <button id="refreshPreview">Refresh preview</button>
+          <button id="download" class="primary">Download PDF</button>
+          <button id="toOutreach">Write the recruiter &rarr;</button>
+        </div>
+      </div>
+      <p class="hint">Only <b>accepted</b> and <b>edited</b> rewrites are applied. Everything else keeps its original wording.</p>
+      <div id="exportMsg" class="msg"></div>
+      <div class="pdfwrap"><iframe id="pdf" title="Resume preview"></iframe></div>
+    </div>
+    <div class="col chat">
+      <h2>Ask for corrections</h2>
+      <p class="hint">Say what looks wrong. The model can reword any line and change font size, spacing, margins and justification. The preview updates straight away, and the latest change can be undone. Reworded lines also show up in step 4.</p>
+      <div id="chatLog" class="chat-log"></div>
+      <textarea id="chatInput" rows="3" placeholder="e.g. The Fletcher bullets spill onto a third line. Shorten them to two."></textarea>
+      <div class="actions" style="margin-top:8px">
+        <span class="count">Enter sends &middot; Shift+Enter for a new line</span>
+        <div class="grow"></div>
+        <button id="chatSend" class="primary">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 6. OUTREACH ─────────────────────────────────────────── -->
+  <section class="panel hidden" data-panel="6">
+    <div class="col">
+      <h2>LinkedIn note <span id="liCount" class="count"></span></h2>
+      <p class="hint">Short enough to send with a connection request (LinkedIn cuts those off at 300 characters).</p>
+      <div class="row tight">
+        <label class="field grow"><span>Recruiter name</span><input id="recruiter" placeholder="optional — leave blank for a neutral greeting"></label>
+        <button id="makeOutreach" class="primary">Draft messages</button>
+      </div>
+      <label class="field" style="margin-top:10px">
+        <span>Extra instruction</span>
+        <input id="outreachNote" placeholder="optional — e.g. mention I met them at the career fair">
+      </label>
+      <div id="outreachMsg" class="msg"></div>
+      <label class="field" style="margin-top:10px"><span>Subject <em>for an InMail or message; a connection note has none</em></span>
+        <input id="liSubject" placeholder="Nothing drafted yet.">
+      </label>
+      <textarea id="liText" rows="7" placeholder="Nothing drafted yet." style="margin-top:10px"></textarea>
+      <div class="actions" style="margin-top:8px">
+        <button id="copyLiSubject" class="tiny">Copy subject</button>
+        <button id="copyLi" class="tiny">Copy note</button>
+        <button class="tiny save-ex" data-kind="linkedin" title="Keep this message as a style reference for future drafts">&#9734; Save as example</button>
+        <span class="count">Edits save automatically.</span>
+      </div>
+      <div class="examples" data-kind="linkedin"></div>
+    </div>
+    <div class="col">
+      <h2>Follow-up email</h2>
+      <p class="hint">Sent a few days after applying, to reiterate interest. Written only from what the exported resume actually claims.</p>
+      <label class="field"><span>Subject</span><input id="emSubject" placeholder="Nothing drafted yet."></label>
+      <textarea id="emBody" rows="15" placeholder="Nothing drafted yet." style="margin-top:10px"></textarea>
+      <div class="actions" style="margin-top:8px">
+        <button id="copyEmail" class="tiny">Copy email</button>
+        <a id="mailto" class="tiny btn" href="#">Open in mail app</a>
+        <button class="tiny save-ex" data-kind="email" title="Keep this message as a style reference for future drafts">&#9734; Save as example</button>
+      </div>
+      <div id="outreachSrc" class="subs hidden"></div>
+      <div class="examples" data-kind="email"></div>
+    </div>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
