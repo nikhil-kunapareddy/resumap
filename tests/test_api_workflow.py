@@ -11,7 +11,7 @@ import re
 import pdfplumber
 import pytest
 
-from app.rendering.pdfgen import LAYOUT_DEFAULTS
+from resumap.rendering.pdfgen import LAYOUT_DEFAULTS
 from tests.conftest import upload
 from tests.fakes import EXPERIENCE_TEXT, INVENTED_TERM, REPLACED_TEXT, tailored
 from tests.fixtures.resumes import BULLETS, JOB_DESCRIPTION, JOB_POINTS

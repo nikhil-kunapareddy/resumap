@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from app.parsing.jd import MAX_POINTS, parse_jd_verbatim, split_points
+from resumap.parsing.jd import MAX_POINTS, parse_jd_verbatim, split_points
 from tests.fixtures.resumes import JOB_DESCRIPTION, JOB_POINTS
 
 

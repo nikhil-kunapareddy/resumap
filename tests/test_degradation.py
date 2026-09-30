@@ -100,7 +100,7 @@ def test_a_failing_test_call_reports_why(client, fake):
 def test_a_correction_that_fails_to_save_leaves_nothing_half_applied(client, fake, job,
                                                                      monkeypatch):
     """The edits, the layout and the chat turns are one transaction."""
-    from app.storage import ChatRepository
+    from resumap.storage import ChatRepository
 
     fake.respond("PdfRevision", {
         "reply": "Done.", "justify": "unchanged",

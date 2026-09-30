@@ -10,10 +10,10 @@ import asyncio
 
 import pytest
 
-from app.llm import BackendUnavailable, ModelGateway, PromptStore
-from app.llm import bullets, outreach, prompts, tagging
-from app.llm.schemas import JDTag
-from app.rendering.pdfgen import clean_layout
+from resumap.llm import BackendUnavailable, ModelGateway, PromptStore
+from resumap.llm import bullets, outreach, prompts, tagging
+from resumap.llm.schemas import JDTag
+from resumap.rendering.pdfgen import clean_layout
 from tests.fakes import INVENTED_TERM, tailored
 from tests.fixtures.resumes import JOB_DESCRIPTION, JOB_POINTS
 

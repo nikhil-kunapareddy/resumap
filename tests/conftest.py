@@ -32,11 +32,11 @@ os.environ.update({
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.config import Paths  # noqa: E402
-from app.llm import BackendRegistry  # noqa: E402
-from app.llm.backends import NAMES  # noqa: E402
-from app.main import create_app  # noqa: E402
-from app.storage import Database, Store  # noqa: E402
+from resumap.config import Paths  # noqa: E402
+from resumap.llm import BackendRegistry  # noqa: E402
+from resumap.llm.backends import NAMES  # noqa: E402
+from resumap.main import create_app  # noqa: E402
+from resumap.storage import Database, Store  # noqa: E402
 from tests.fakes import FakeBackend  # noqa: E402
 from tests.fixtures import resumes  # noqa: E402
 

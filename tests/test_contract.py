@@ -12,15 +12,15 @@ import pytest
 from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
-from app.api.routers import ALL as ROUTERS
-from app.llm import EDITABLE_PROMPTS, bullets, outreach, prompts, schemas
-from app.main import create_app
-from app.domain import (INCLUDED_STATUSES, ChatMessage, Experience, ExperienceKind,
+from resumap.api.routers import ALL as ROUTERS
+from resumap.llm import EDITABLE_PROMPTS, bullets, outreach, prompts, schemas
+from resumap.main import create_app
+from resumap.domain import (INCLUDED_STATUSES, ChatMessage, Experience, ExperienceKind,
                         JDCategory, Job, Justify, Layout, OutreachDraft, OutreachExample,
                         OutreachKind, Resume, ResumeDoc, Rewrite, RewriteMode, RewriteStatus,
                         Run)
-from app.parsing.resume import parse_resume
-from app.rendering.pdfgen import LAYOUT_DEFAULTS, clean_layout
+from resumap.parsing.resume import parse_resume
+from resumap.rendering.pdfgen import LAYOUT_DEFAULTS, clean_layout
 
 # Routes that answer with a file or plain text rather than JSON.
 NON_JSON = {"/api/jobs/{job_id}/preview.pdf", "/api/download/{filename}",

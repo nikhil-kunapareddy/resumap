@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
 
-# The package lives at <project>/backend/app, so the project root -- which
+# The package lives at <project>/backend/resumap, so the project root -- which
 # holds .env, data/ and the frontend -- is two levels up.
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = BACKEND_DIR.parent

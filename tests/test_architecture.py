@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-APP = Path(__file__).resolve().parent.parent / "backend" / "app"
+APP = Path(__file__).resolve().parent.parent / "backend" / "resumap"
 
 # package -> the app packages its modules may import (itself always allowed)
 ALLOWED = {

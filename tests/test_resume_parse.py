@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from app.parsing.resume import parse_resume
+from resumap.parsing.resume import parse_resume
 from tests.fixtures.resumes import BULLETS, NAME
 
 GOLDEN = Path(__file__).parent / "golden"

@@ -155,7 +155,7 @@ toggle is how you pull it in.
 
 Every point — resume or JD — is reassembled into a whole thought and ends in a
 full stop. Two different things break this, so both parsers share
-`backend/app/parsing/text.py`:
+`backend/resumap/parsing/text.py`:
 
 - **A PDF bullet wrapping inside its column.** Deciding whether the next line is
   a continuation is geometric: the line above had *no room left for this line's
@@ -250,7 +250,7 @@ text rather than the picture:
 run.py                    launcher (re-execs into .venv, opens the browser)
 backend/
   requirements.txt        runtime dependencies (requirements-dev.txt adds pytest)
-  app/
+  resumap/
     main.py               create_app(): wires everything below into one FastAPI app
     config.py             env config; Paths (where an instance keeps its files)
     obs.py                structured logging, cost accounting, prompt archive
@@ -291,11 +291,11 @@ port and no build step. `run.py` stays at the root and puts `backend/` on
 `sys.path`; to drive uvicorn yourself, run it from inside `backend/`:
 
 ```bash
-cd backend && ../.venv/bin/uvicorn app.main:app --reload
+cd backend && ../.venv/bin/uvicorn resumap.main:app --reload
 ```
 
-The only paths that cross the line are `FRONTEND_DIR` in `backend/app/config.py`
-and the `app.mount` at the end of `create_app` in `backend/app/main.py`. Everything else the
+The only paths that cross the line are `FRONTEND_DIR` in `backend/resumap/config.py`
+and the `app.mount` at the end of `create_app` in `backend/resumap/main.py`. Everything else the
 backend touches (`.env`, `data/`) is addressed from the project root, so a
 future move of either half is a two-line change.
 

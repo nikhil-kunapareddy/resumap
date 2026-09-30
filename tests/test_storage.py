@@ -6,9 +6,9 @@ import sqlite3
 
 import pytest
 
-from app.domain import (BoxMode, ExperienceKind, Job, Resume, RewriteMode, RewriteStatus,
+from resumap.domain import (BoxMode, ExperienceKind, Job, Resume, RewriteMode, RewriteStatus,
                         experience_id, experience_key)
-from app.storage import Database, Store
+from resumap.storage import Database, Store
 
 DOC = {"name": "Jane Doe", "body_size": 10.0, "leading": 12.5, "diagnostics": {},
        "geometry": {"width": 612.0, "height": 792.0, "left": 54.0, "right": 54.0,

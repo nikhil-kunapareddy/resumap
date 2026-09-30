@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-BACKEND_DIR = ROOT / "backend"      # the `app` package lives here
+BACKEND_DIR = ROOT / "backend"      # the `resumap` package lives here
 VENV_DIR = ROOT / ".venv"
 VENV_PY = VENV_DIR / "bin" / "python"
 
@@ -44,8 +44,8 @@ def main() -> None:
         )
 
     sys.path.insert(0, str(BACKEND_DIR))
-    from app.config import HOST, PORT
-    from app.main import app
+    from resumap.config import HOST, PORT
+    from resumap.main import app
 
     services = app.state.services
     services.paths.ensure()
@@ -67,7 +67,7 @@ def main() -> None:
             target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True
         ).start()
 
-    uvicorn.run("app.main:app", host=HOST, port=PORT, log_level="warning")
+    uvicorn.run("resumap.main:app", host=HOST, port=PORT, log_level="warning")
 
 
 if __name__ == "__main__":

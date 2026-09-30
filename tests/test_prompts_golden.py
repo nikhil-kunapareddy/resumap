@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from app.llm import bullets, corrections, outreach, tagging
-from app.llm.prompts import PromptStore
-from app.parsing.resume import parse_resume
-from app.rendering.pdfgen import clean_layout
+from resumap.llm import bullets, corrections, outreach, tagging
+from resumap.llm.prompts import PromptStore
+from resumap.parsing.resume import parse_resume
+from resumap.rendering.pdfgen import clean_layout
 from tests.fixtures.resumes import JOB_DESCRIPTION, JOB_POINTS
 
 GOLDEN = Path(__file__).parent / "golden" / "prompts"

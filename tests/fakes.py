@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from app.llm.backends import Backend, Completion, Usage
+from resumap.llm.backends import Backend, Completion, Usage
 
 Handler = Callable[[str, str], "dict[str, Any] | None"]
 
