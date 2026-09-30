@@ -10,10 +10,18 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from .database import Database
-from .repositories import (ChatRepository, ExperienceRepository, JobRepository,
-                           LayoutRepository, MappingRepository, OutreachExampleRepository,
-                           OutreachRepository, ResumeRepository, RewriteRepository,
-                           SettingsRepository)
+from .repositories import (
+    ChatRepository,
+    ExperienceRepository,
+    JobRepository,
+    LayoutRepository,
+    MappingRepository,
+    OutreachExampleRepository,
+    OutreachRepository,
+    ResumeRepository,
+    RewriteRepository,
+    SettingsRepository,
+)
 
 
 class Store:

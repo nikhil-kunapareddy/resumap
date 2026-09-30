@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .layout import BULLET_RE, ExtractedDoc, Line, extract
 from .. import obs
+from .layout import BULLET_RE, ExtractedDoc, Line, extract
 from .text import continues, ensure_stop, is_dangling, is_terminated
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
@@ -237,9 +237,9 @@ def _dominant_size(lines: list[Line]) -> float:
     if not lines:
         return 10.5
     counts: dict[float, int] = {}
-    for l in lines:
+    for ln in lines:
         # Weight by character count so a big name doesn't outvote the body.
-        counts[round(l.size, 1)] = counts.get(round(l.size, 1), 0) + len(l.text)
+        counts[round(ln.size, 1)] = counts.get(round(ln.size, 1), 0) + len(ln.text)
     return max(counts.items(), key=lambda kv: kv[1])[0]
 
 
@@ -345,28 +345,29 @@ def parse_resume(path: str) -> dict[str, Any]:
     # original did, instead of needing to be compressed to get there.
     steps = sorted(
         b.top - a.top
-        for a, b in zip(lines, lines[1:])
+        for a, b in zip(lines, lines[1:], strict=False)
         if a.page == b.page and abs(a.size - b.size) < 0.6
         and 0 < (b.top - a.top) <= a.size * 1.8
     )
     doc_leading = steps[len(steps) // 2] if steps else body * 1.2
 
-    top_of_page0 = min((l.top for l in lines if l.page == 0), default=0.0)
+    top_of_page0 = min((ln.top for ln in lines if ln.page == 0), default=0.0)
     header_zone = top_of_page0 + 90
     # The rightmost text position in the document approximates the text column's
     # right edge, which is how we tell a wrapped line from a new one.
-    content_right = max((l.x1 for l in lines), default=558.0)
+    content_right = max((ln.x1 for ln in lines), default=558.0)
 
-    for idx, line in enumerate(lines):
+    for line in lines:
         text = line.text.strip()
         if not text:
             continue
 
         prev = blocks[-1] if blocks else None
-        is_bullet = bool(BULLET_RE.match(text))
+        bullet = BULLET_RE.match(text)
+        is_bullet = bullet is not None
         bullet_char = ""
-        if is_bullet:
-            bullet_char = BULLET_RE.match(text).group(1)
+        if bullet is not None:
+            bullet_char = bullet.group(1)
             text = BULLET_RE.sub("", text).strip()
             # The glyph is re-drawn by the exporter as a hanging indent, so it
             # must not survive inside the styled runs as well -- otherwise the
@@ -517,21 +518,21 @@ def parse_resume(path: str) -> dict[str, Any]:
     from collections import Counter
     reasons = Counter(b.get("reason") or "point" for b in blocks)
     kinds = Counter(b["kind"] for b in blocks)
-    diagnostics = {
-        "pages": max((l.page for l in lines), default=0) + 1,
+    diagnostics: dict[str, Any] = {
+        "pages": max((ln.page for ln in lines), default=0) + 1,
         "lines": len(lines),
         "blocks": len(blocks),
         "points": sum(1 for b in blocks if b["mappable"]),
         "kinds": dict(kinds),
         "reasons": dict(reasons),
-        "tab_stops": sum(1 for l in lines if l.right),
-        "justified_lines": sum(1 for l in lines if l.stretched),
+        "tab_stops": sum(1 for ln in lines if ln.right),
+        "justified_lines": sum(1 for ln in lines if ln.stretched),
         "merges": len(merges),
         "merge_reasons": dict(Counter(m["reason"] for m in merges)),
         "label_guard_blocks": len(blocked_labels),
         "rules": len(doc.rules),
         "truncated": sum(1 for b in blocks if b.get("truncated")),
-        "fonts": sorted({l.font.split("+")[-1] for l in lines})[:8],
+        "fonts": sorted({ln.font.split("+")[-1] for ln in lines})[:8],
         "geometry": {"left": round(g.left, 1), "right": round(g.right, 1),
                      "top": round(g.top, 1), "bottom": round(g.bottom, 1)},
         "body_size": body,

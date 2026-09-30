@@ -1,6 +1,8 @@
 """The messages that ask for recruiter outreach."""
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from ..domain import OutreachKind
 
 # --------------------------------------------------------------------------
@@ -74,7 +76,7 @@ def _example_lines(examples: list[dict], kind: str) -> list[str]:
 
 def outreach_prompt(candidate: str, recruiter: str, role: str, company: str,
                      highlights: list[str], jd_points: list[dict],
-                     examples: list[dict] = ()) -> str:
+                     examples: Sequence[dict] = ()) -> str:
     lines = [
         f"<candidate_name>{candidate or 'unspecified'}</candidate_name>",
         f"<recruiter_name>{recruiter or 'not known'}</recruiter_name>",

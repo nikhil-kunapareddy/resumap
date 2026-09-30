@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from .. import obs
-from ..domain import ChatMessage, ChatRole, Rewrite, RewriteStatus
+from ..domain import ChatMessage, ChatRole, Layout, Rewrite, RewriteStatus
 from ..llm import BackendUnavailable, ModelGateway
 from ..rendering.pdfgen import clean_layout
 from ..storage import Store
@@ -12,7 +12,7 @@ from .base import Service, stored_meta
 from .documents import left_text, render_doc
 from .errors import Conflict, Invalid, NotFound, Unavailable, UpstreamFailed
 from .exports import ExportService
-from .results import ChatMessageOut, ChatState
+from .results import ChatMessageOut, ChatMetaOut, ChatState
 
 CHAT_HISTORY = 12
 
@@ -65,12 +65,13 @@ class CorrectionService(Service):
         return ChatState(
             messages=[
                 ChatMessageOut(id=m.id, role=m.role, text=m.text,
-                               meta={k: v for k, v in m.meta.items() if k != "before"},
+                               meta=ChatMetaOut(**{k: v for k, v in m.meta.items()
+                                                   if k != "before"}),
                                can_undo=m.id == last)
                 for m in msgs
             ],
             rewrites=self.store.rewrites.for_job(job_id),
-            layout=clean_layout(self.store.layouts.get(job_id)),
+            layout=Layout(**clean_layout(self.store.layouts.get(job_id))),
         )
 
     async def apply(self, job_id: int, message: str) -> ChatState:

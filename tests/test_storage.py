@@ -6,8 +6,16 @@ import sqlite3
 
 import pytest
 
-from resumap.domain import (BoxMode, ExperienceKind, Job, Resume, RewriteMode, RewriteStatus,
-                        experience_id, experience_key)
+from resumap.domain import (
+    BoxMode,
+    ExperienceKind,
+    Job,
+    Resume,
+    RewriteMode,
+    RewriteStatus,
+    experience_id,
+    experience_key,
+)
 from resumap.storage import Database, Store
 
 DOC = {"name": "Jane Doe", "body_size": 10.0, "leading": 12.5, "diagnostics": {},

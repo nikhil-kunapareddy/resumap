@@ -9,8 +9,16 @@ import pdfplumber
 import pytest
 
 from resumap.parsing.resume import parse_resume
-from resumap.rendering.pdfgen import (FIT_LADDER, LAYOUT_DEFAULTS, clean_layout, export_filename,
-                                  insert_blocks, line_budget, new_bullet_budget, render_resume)
+from resumap.rendering.pdfgen import (
+    FIT_LADDER,
+    LAYOUT_DEFAULTS,
+    clean_layout,
+    export_filename,
+    insert_blocks,
+    line_budget,
+    new_bullet_budget,
+    render_resume,
+)
 from resumap.rendering.selfcheck import verify_pdf
 from tests.fixtures.resumes import BULLETS
 

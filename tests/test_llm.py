@@ -10,8 +10,15 @@ import asyncio
 
 import pytest
 
-from resumap.llm import BackendUnavailable, ModelGateway, PromptStore
-from resumap.llm import bullets, outreach, prompts, tagging
+from resumap.llm import (
+    BackendUnavailable,
+    ModelGateway,
+    PromptStore,
+    bullets,
+    outreach,
+    prompts,
+    tagging,
+)
 from resumap.llm.schemas import JDTag
 from resumap.rendering.pdfgen import clean_layout
 from tests.fakes import INVENTED_TERM, tailored
@@ -82,7 +89,8 @@ def test_parse_jd_needs_no_backend(fake, gateway):
 # -- prompts ----------------------------------------------------------------
 
 def test_rewrite_request_carries_the_mode_rules_and_the_budget():
-    system, user = bullets.rewrite_request(PromptStore(), **rewrite_args(mode="truthful", extra="Lead with scale."))
+    system, user = bullets.rewrite_request(
+        PromptStore(), **rewrite_args(mode="truthful", extra="Lead with scale."))
     assert prompts.REWRITE_SYSTEM in system
     assert prompts.MODE_RULES["truthful"] in system
     assert system.endswith("Lead with scale.")
@@ -210,8 +218,9 @@ def test_revise_pdf_drops_unknown_blocks_and_converts_layout_units(fake, gateway
     blocks = [{"id": bid, "kind": "bullet", "section": "EXPERIENCE", "text": text,
                "original": text, "lines": 1, "source_lines": 1, "chars_per_line": 100}
               for bid, text in (("bul005", "Old text."), ("bul006", "Same text."))]
-    out = run(gateway.revise_pdf(blocks=blocks, layout=clean_layout(None), fit={}, geometry={}, role="",
-                                company="", jd_points=[], history=[], message="Tighten"))
+    out = run(gateway.revise_pdf(blocks=blocks, layout=clean_layout(None), fit={}, geometry={},
+                                 role="", company="", jd_points=[], history=[],
+                                 message="Tighten"))
     assert [e["block_id"] for e in out["edits"]] == ["bul005"]
     assert out["edits"][0]["text"] == "Built pipelines."
     assert out["layout"] == {"font": 0.9, "margin_x": 50.0, "justify": "on"}

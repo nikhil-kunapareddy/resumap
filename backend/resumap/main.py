@@ -17,8 +17,20 @@ from . import obs
 from .api import errors
 from .api.routers import ALL as ROUTERS
 from .api.schemas import ErrorOut
-from .config import (BACKEND, BASE_DIR, CLAUDE_CLI, CODEX_CLI, DEFAULT_FIRST_NAME, DOTENV_KEYS,
-                     FRONTEND_DIR, LOG_LEVEL, MODEL, PI_CLI, Paths, api_key)
+from .config import (
+    BACKEND,
+    BASE_DIR,
+    CLAUDE_CLI,
+    CODEX_CLI,
+    DEFAULT_FIRST_NAME,
+    DOTENV_KEYS,
+    FRONTEND_DIR,
+    LOG_LEVEL,
+    MODEL,
+    PI_CLI,
+    Paths,
+    api_key,
+)
 from .llm import BackendRegistry, ModelGateway, PromptStore, default_registry
 from .services import Services
 from .storage import Database, Store
@@ -74,7 +86,7 @@ class _NoCacheStatic(StaticFiles):
     without asking.
     """
 
-    def file_response(self, *args, **kwargs):  # type: ignore[override]
+    def file_response(self, *args, **kwargs):
         resp = super().file_response(*args, **kwargs)
         resp.headers["Cache-Control"] = "no-cache"
         return resp

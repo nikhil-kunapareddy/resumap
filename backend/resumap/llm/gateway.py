@@ -10,13 +10,14 @@ nothing else reaches a backend.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 
 from .. import obs
 from ..parsing.jd import guess_company, guess_role, parse_jd_verbatim
 from . import bullets, corrections, outreach, tagging
 from .backends import Backend, BackendRegistry, Completion
-from .prompts import PromptStore
+from .prompts import PromptStore, with_note
 from .schemas import JDTags, NewBullet, Outreach, PdfRevision, Ping, Rewrite
 
 
@@ -25,8 +26,9 @@ class BackendUnavailable(RuntimeError):
 
 
 # The request builders behind each kind of transform job, for the preview.
-REQUESTS = {"rewrite": bullets.rewrite_request, "replace": bullets.replace_request,
-            "experience": bullets.experience_request}
+REQUESTS: dict[str, Callable[..., tuple[str, str]]] = {
+    "rewrite": bullets.rewrite_request, "replace": bullets.replace_request,
+    "experience": bullets.experience_request}
 
 
 class ModelGateway:
@@ -269,9 +271,11 @@ class ModelGateway:
                   backend=self.registry.current_name(),
                   mode=(jobs[0]["args"].get("mode") if jobs else None))
 
+        calls: dict[str, Callable[..., Awaitable[dict]]] = {
+            "experience": self.write_experience_bullet, "replace": self.replace_bullet}
+
         async def one(job: dict) -> dict:
-            fn = {"experience": self.write_experience_bullet,
-                  "replace": self.replace_bullet}.get(job.get("kind"), self.rewrite_bullet)
+            fn = calls.get(job.get("kind") or "", self.rewrite_bullet)
             async with sem:
                 try:
                     res = await fn(**job["args"])
@@ -374,7 +378,7 @@ class ModelGateway:
         highlights: list[str],
         jd_points: list[dict],
         extra: str = "",
-        examples: list[dict] = (),
+        examples: Sequence[dict] = (),
     ) -> dict:
         """One LinkedIn note and one follow-up email for a tailored application.
 
@@ -382,14 +386,13 @@ class ModelGateway:
         forbids taking facts from them, since they were written for other roles.
         """
         backend = self._backend()
-        system = outreach.OUTREACH_SYSTEM
-        if extra.strip():
-            system += f"\n\nADDITIONAL USER INSTRUCTION (overrides tone preferences above):\n{extra.strip()}"
+        system = with_note(outreach.OUTREACH_SYSTEM, extra)
 
         user = outreach.outreach_prompt(candidate, recruiter, role, company, highlights,
                                         jd_points, examples)
-        n_ex = {k: min(outreach.OUTREACH_EXAMPLE_LIMIT, sum(e["kind"] == k for e in examples))
-                for k in outreach.OUTREACH_EXAMPLE_KINDS}
+        n_ex: dict[str, int] = {
+            k: min(outreach.OUTREACH_EXAMPLE_LIMIT, sum(e["kind"] == k for e in examples))
+            for k in outreach.OUTREACH_EXAMPLE_KINDS}
         obs.event("outreach.start", has_recruiter=bool(recruiter.strip()),
                   highlights=len(highlights), points=len(jd_points),
                   linkedin_examples=n_ex["linkedin"], email_examples=n_ex["email"],

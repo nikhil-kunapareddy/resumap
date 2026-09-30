@@ -9,7 +9,15 @@ from ..llm.backends import suggest_model
 from ..storage import Store
 from .base import Service
 from .errors import Invalid, NotFound
-from .results import BackendsOut, BackendTestOut, PromptInfo, PromptsOut, SettingsOut, StatusOut
+from .results import (
+    BackendInfo,
+    BackendsOut,
+    BackendTestOut,
+    PromptInfo,
+    PromptsOut,
+    SettingsOut,
+    StatusOut,
+)
 
 PROMPT_MAX_CHARS = 20000
 
@@ -59,7 +67,8 @@ class SettingsService(Service):
     def backends(self) -> BackendsOut:
         """Every backend and whether it can run, for the settings panel."""
         registry = self.gateway.registry
-        return BackendsOut(selected=registry.current_name(), backends=registry.describe())
+        return BackendsOut(selected=registry.current_name(),
+                           backends=[BackendInfo(**b) for b in registry.describe()])
 
     async def test_backend(self, name: str, model: str) -> BackendTestOut:
         """Make one tiny real call through a backend, without switching to it.
@@ -109,7 +118,7 @@ class SettingsService(Service):
     # -- editable prompts ---------------------------------------------------
 
     def prompts(self) -> PromptsOut:
-        return PromptsOut(prompts=self.gateway.prompts.describe())
+        return PromptsOut(prompts=[PromptInfo(**p) for p in self.gateway.prompts.describe()])
 
     def _prompt_info(self, key: str) -> PromptInfo:
         return PromptInfo(**next(x for x in self.gateway.prompts.describe() if x["key"] == key))

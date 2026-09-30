@@ -105,7 +105,8 @@ def test_a_labelled_skills_line_is_not_a_section(parsed):
     assert "Languages: Python, SQL, Scala, TypeScript" not in parsed["pdf"]["sections"]
 
 
-@pytest.mark.xfail(strict=True, reason="in TXT an entry line right after a bullet is merged into it")
+@pytest.mark.xfail(strict=True,
+                   reason="in TXT an entry line right after a bullet is merged into it")
 def test_txt_entry_after_a_bullet_stays_its_own_block(parsed):
     bullet = next(b for b in parsed["txt"]["blocks"] if b["text"].startswith("Led a team"))
     assert "Contoso Group" not in bullet["text"]

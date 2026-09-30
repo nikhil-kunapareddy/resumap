@@ -25,7 +25,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from .anthropic_api import AnthropicApiBackend
-from .base import Backend, Completion, Usage, cli_env, run_cli
+from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
 from .claude_code import ClaudeCodeBackend
 from .codex import CodexBackend
 from .pi import PiBackend
@@ -49,5 +49,5 @@ def default_registry(*, selected: str, model: str, api_key: Callable[[], str | N
 
 
 __all__ = ["NAMES", "AnthropicApiBackend", "Backend", "BackendRegistry", "ClaudeCodeBackend",
-           "CodexBackend", "Completion", "PiBackend", "Usage", "cli_env", "default_registry",
-           "run_cli", "suggest_model"]
+           "CodexBackend", "Completion", "Effort", "PiBackend", "Usage", "cli_env",
+           "default_registry", "run_cli", "suggest_model"]

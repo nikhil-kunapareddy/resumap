@@ -7,7 +7,7 @@ from typing import Any
 import anthropic
 from pydantic import BaseModel
 
-from .base import Backend, Completion, Usage
+from .base import Backend, Completion, Effort, Usage
 
 
 class AnthropicApiBackend(Backend):
@@ -42,7 +42,7 @@ class AnthropicApiBackend(Backend):
 
     async def complete(self, *, model: str, system: str, user: str,
                        schema: type[BaseModel], max_tokens: int,
-                       effort: str) -> Completion:
+                       effort: Effort) -> Completion:
         client = anthropic.AsyncAnthropic(api_key=self._api_key(), max_retries=3)
         resp = await client.messages.parse(
             model=model,

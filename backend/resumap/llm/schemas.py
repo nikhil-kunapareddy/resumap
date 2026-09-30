@@ -16,7 +16,8 @@ from .outreach import LINKEDIN_LIMIT
 
 class Ping(BaseModel):
     ok: bool = Field(description="Always true.")
-    model: str = Field(description="The name of the model answering, if known, else an empty string.")
+    model: str = Field(
+        description="The name of the model answering, if known, else an empty string.")
 
 
 

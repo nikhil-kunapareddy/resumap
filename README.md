@@ -13,8 +13,8 @@ sent again when you ask for the outreach messages.
 ## Setup
 
 ```bash
-uv venv && uv pip install -r backend/requirements.txt   # or: python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
-cp .env.example .env                            # then pick a backend, below
+uv sync                      # or: python3 -m venv .venv && .venv/bin/pip install -e .
+cp .env.example .env         # then pick a backend, below
 python3 run.py
 ```
 
@@ -248,8 +248,8 @@ text rather than the picture:
 
 ```
 run.py                    launcher (re-execs into .venv, opens the browser)
+pyproject.toml            dependencies and tool config (locked in uv.lock)
 backend/
-  requirements.txt        runtime dependencies (requirements-dev.txt adds pytest)
   resumap/
     main.py               create_app(): wires everything below into one FastAPI app
     config.py             env config; Paths (where an instance keeps its files)
@@ -277,6 +277,7 @@ backend/
 frontend/                 browser UI (vanilla JS, no build step)
   index.html  app.js  styles.css
 tests/                    pytest suite: fake backend, generated sample resume
+docs/                     architecture.md (the design), system-design.png
 data/                     SQLite db, uploads, exports  (gitignored)
 .env                      backend choice, model, overrides
 ```
@@ -365,16 +366,19 @@ It runs on every export and warns rather than silently passing.
 ## Tests
 
 ```bash
-uv pip install -r backend/requirements-dev.txt
-.venv/bin/python -m pytest
+uv sync --extra dev
+uv run pytest                # tests
+uv run ruff check            # lint
+uv run mypy                  # types
 ```
 
-The suite runs in a few seconds and never touches `data/`, your `.env` settings
+CI runs all three on Python 3.10 to 3.13 (`.github/workflows/ci.yml`). The suite runs in a few seconds and never touches `data/`, your `.env` settings
 or a real model: every model call goes to a scripted fake backend, and the
 sample resume is a fictional one generated as PDF, DOCX and TXT. Parser output
 is pinned in `tests/golden/`; after an intended change to how resumes are
-classified, re-pin it with `RESUMAP_UPDATE_GOLDEN=1 .venv/bin/python -m pytest
-tests/test_resume_parse.py` and review the diff. Known defects are marked as
+classified, re-pin it with `RESUMAP_UPDATE_GOLDEN=1 uv run pytest
+tests/test_resume_parse.py` and review the diff; prompts are pinned the same way
+in `tests/golden/prompts/`. Known defects are marked as
 strict expected failures, so fixing one fails the run until the marker goes.
 
 ## Notes
@@ -389,6 +393,13 @@ strict expected failures, so fixing one fails the run until the marker goes.
 - If Claude's JD parse fails, the app falls back to a built-in splitter and
   tells you it did.
 - Port and host are `RESUMAP_PORT` / `RESUMAP_HOST`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and where changes go,
+[docs/architecture.md](docs/architecture.md) for the design, and
+[SECURITY.md](SECURITY.md) for how Resumap is meant to be run and how to report
+a problem.
 
 ## License
 

@@ -103,8 +103,8 @@ def split_points(text: str) -> list[str]:
     raw_lines = text.count("\n") + 1
     text = unwrap(
         text,
-        is_list_item=lambda l: bool(BULLET_PREFIX.match(l)),
-        is_heading=lambda l: bool(HEADING.match(l)),
+        is_list_item=lambda ln: bool(BULLET_PREFIX.match(ln)),
+        is_heading=lambda ln: bool(HEADING.match(ln)),
     )
     joined = raw_lines - (text.count("\n") + 1)
     if joined:
@@ -113,7 +113,7 @@ def split_points(text: str) -> list[str]:
     # Prose that appears before the first "Responsibilities"/"Requirements"
     # heading is company blurb, not a requirement. If the posting has no
     # headings at all, we have nothing to anchor on and keep everything.
-    has_heading = any(HEADING.match(l) for l in text.splitlines())
+    has_heading = any(HEADING.match(ln) for ln in text.splitlines())
     seen_heading = False
     in_boilerplate = False
     points: list[str] = []

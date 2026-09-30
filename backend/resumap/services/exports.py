@@ -11,7 +11,7 @@ from ..storage import Store
 from .base import Service
 from .documents import overrides, render_doc
 from .errors import NotFound
-from .results import ExportOut, FitOut
+from .results import ExportOut, FitOut, SelfCheck
 from .settings import SettingsService
 
 
@@ -54,7 +54,7 @@ class ExportService(Service):
                   selfcheck_ok=check.get("ok"),
                   problems=check.get("problems") or None)
         return ExportOut(
-            check={k: v for k, v in check.items() if k != "fonts"},
+            check=SelfCheck(**{k: v for k, v in check.items() if k != "fonts"}),
             filename=name,
             url=f"/api/download/{name}",
             applied=applied,

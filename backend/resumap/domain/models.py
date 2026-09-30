@@ -20,8 +20,16 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .enums import (BlockKind, ChatRole, ExperienceKind, JDCategory, Justify,
-                    OutreachKind, RewriteMode, RewriteStatus)
+from .enums import (
+    BlockKind,
+    ChatRole,
+    ExperienceKind,
+    JDCategory,
+    Justify,
+    OutreachKind,
+    RewriteMode,
+    RewriteStatus,
+)
 
 
 class Entity(BaseModel):
@@ -190,7 +198,8 @@ class RewriteMeta(Document):
     placement: str | None = None
     placement_user: bool = False
     replaced: bool = False
-    source: str | None = Field(default=None, description='"chat" when the corrections chat wrote it.')
+    source: str | None = Field(
+        default=None, description='"chat" when the corrections chat wrote it.')
 
 
 class Rewrite(Entity):

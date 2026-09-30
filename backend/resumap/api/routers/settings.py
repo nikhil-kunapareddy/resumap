@@ -3,8 +3,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ...services.results import (BackendsOut, BackendTestOut, PromptInfo, PromptsOut,
-                                 SettingsOut, StatusOut)
+from ...services.results import (
+    BackendsOut,
+    BackendTestOut,
+    PromptInfo,
+    PromptsOut,
+    SettingsOut,
+    StatusOut,
+)
 from ..deps import ServicesDep
 from ..schemas import BackendBody, ModelBody, PromptBody, SettingsBody
 

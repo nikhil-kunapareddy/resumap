@@ -35,7 +35,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Usage
+from .base import Backend, Completion, Effort, Usage
 
 # One turn to answer plus one to emit the structured output, and a little room
 # for the SDK to re-prompt itself after a schema mismatch.
@@ -68,8 +68,8 @@ class ClaudeCodeBackend(Backend):
 
     def unavailable(self) -> str | None:
         if importlib.util.find_spec("claude_agent_sdk") is None:
-            return ("The claude-agent-sdk package is not installed. Run "
-                    "`pip install -r requirements.txt`, or set RESUMAP_BACKEND=api "
+            return ("The claude-agent-sdk package is not installed. Run `uv sync` "
+                    "(or `pip install -e .`), or set RESUMAP_BACKEND=api "
                     "to use an Anthropic API key instead.")
         if self._cli_path() is None:
             return ("Could not find the `claude` command. Install Claude Code and "
@@ -80,7 +80,7 @@ class ClaudeCodeBackend(Backend):
 
     async def complete(self, *, model: str, system: str, user: str,
                        schema: type[BaseModel], max_tokens: int,
-                       effort: str) -> Completion:
+                       effort: Effort) -> Completion:
         from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
         # max_tokens has no Agent SDK equivalent -- the CLI applies the model's own

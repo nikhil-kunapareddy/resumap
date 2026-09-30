@@ -644,7 +644,7 @@ def render_resume(doc: dict, out_path: str, overrides: dict[str, str] | None = N
     """
     layout = clean_layout(layout)
 
-    def pages_at(step: tuple) -> int:
+    def pages_at(step: tuple[float, float, float]) -> int:
         return ResumeRenderer(doc, *step, layout=layout).render(io.BytesIO(), overrides)
 
     chosen = None
@@ -729,7 +729,7 @@ def _refine(loose: tuple, tight: tuple, pages_at, rounds: int = 6) -> tuple:
     lo, hi = 0.0, 1.0
     for _ in range(rounds):
         mid = (lo + hi) / 2
-        step = tuple(round(a + (b - a) * mid, 4) for a, b in zip(loose, tight))
+        step = tuple(round(a + (b - a) * mid, 4) for a, b in zip(loose, tight, strict=True))
         if pages_at(step) == 1:
             best, hi = step, mid
         else:
@@ -850,7 +850,7 @@ def insert_blocks(doc: dict, inserts: list[dict]) -> dict:
         head_extra = gap_extra(blocks[ref - 1], blocks[ref], lead, body) if ref else body
         under_extra = (gap_extra(blocks[ref], blocks[ref + 1], lead, body)
                        if ref is not None and ref + 1 < n else 0.0)
-        caps = bool(model) and model["text"].upper() == model["text"]
+        caps = model is not None and model["text"].upper() == model["text"]
         for k, (heading, group) in enumerate(groups.items(), start=1):
             head_line = dict(model["_line"]) if model else {
                 **dict(blocks[-1]["_line"]), "bold": True, "x0": float(

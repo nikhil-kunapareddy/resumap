@@ -33,7 +33,8 @@ def entry_context(doc: dict, block_id: str) -> tuple[str, list[str]]:
     A replaced bullet has nothing of its own to stand on, so these are what
     keep it plausible for the role and stop it repeating its neighbours.
     """
-    entry, group, found = "", [], False
+    entry, found = "", False
+    group: list[str] = []
     for b in doc.get("blocks", []):
         if b["kind"] in ("entry", "section"):
             if found:

@@ -34,7 +34,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Usage, cli_env, run_cli
+from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
 
 TIMEOUT_S = 300
 
@@ -155,7 +155,7 @@ class PiBackend(Backend):
 
     async def complete(self, *, model: str, system: str, user: str,
                        schema: type[BaseModel], max_tokens: int,
-                       effort: str) -> Completion:
+                       effort: Effort) -> Completion:
         cli = self._cli_path()
         if cli is None:
             raise RuntimeError(self.unavailable() or "pi not found")
@@ -164,11 +164,12 @@ class PiBackend(Backend):
             schema=json.dumps(schema.model_json_schema(), separators=(",", ":")))
 
         totals: dict[str, float] = {"input": 0, "output": 0, "cacheRead": 0, "cost": 0.0}
-        parsed, text, session, message = None, "", None, {}
+        parsed, text, session = None, "", None
+        message: dict = {}
         prompt = user
         attempts = 0
         # max_tokens has no pi flag; the model's own cap applies.
-        for attempts in (1, 2):
+        for attempts in (1, 2):  # noqa: B007 - the count is reported after the loop
             message, session = await self._ask(cli, full_system, prompt, model, thinking)
             u = message.get("usage") or {}
             for k in ("input", "output", "cacheRead"):

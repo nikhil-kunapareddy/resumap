@@ -119,8 +119,8 @@ class ExperienceService(Service):
             raise NotFound("Experience not found")
         key = experience_key(experience_id)
         with self.store.transaction():
-            gone = {"mappings": self.store.mappings.delete_key(key),
-                    "rewrites": self.store.rewrites.delete_key(key)}
+            mappings = self.store.mappings.delete_key(key)
+            rewrites = self.store.rewrites.delete_key(key)
             self.store.experiences.delete(experience_id)
-        obs.event("experience.deleted", id=experience_id, **gone)
-        return ExperienceDeleted(**gone)
+        obs.event("experience.deleted", id=experience_id, mappings=mappings, rewrites=rewrites)
+        return ExperienceDeleted(mappings=mappings, rewrites=rewrites)

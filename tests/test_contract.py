@@ -13,12 +13,27 @@ from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
 from resumap.api.routers import ALL as ROUTERS
+from resumap.domain import (
+    INCLUDED_STATUSES,
+    ChatMessage,
+    Experience,
+    ExperienceKind,
+    JDCategory,
+    Job,
+    Justify,
+    Layout,
+    OutreachDraft,
+    OutreachExample,
+    OutreachKind,
+    Resume,
+    ResumeDoc,
+    Rewrite,
+    RewriteMode,
+    RewriteStatus,
+    Run,
+)
 from resumap.llm import EDITABLE_PROMPTS, bullets, outreach, prompts, schemas
 from resumap.main import create_app
-from resumap.domain import (INCLUDED_STATUSES, ChatMessage, Experience, ExperienceKind,
-                        JDCategory, Job, Justify, Layout, OutreachDraft, OutreachExample,
-                        OutreachKind, Resume, ResumeDoc, Rewrite, RewriteMode, RewriteStatus,
-                        Run)
 from resumap.parsing.resume import parse_resume
 from resumap.rendering.pdfgen import LAYOUT_DEFAULTS, clean_layout
 

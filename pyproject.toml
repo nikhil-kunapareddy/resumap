@@ -1,0 +1,98 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resumap"
+version = "0.1.0"
+description = "Tailor a resume to a job description point by point, and export it as a layout-mirroring one-page PDF."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Sai Nikhil Kunapareddy" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "anthropic>=1.0",
+    "claude-agent-sdk>=0.2",
+    "pdfplumber>=0.11",
+    "python-docx>=1.1",
+    "reportlab>=4.2",
+    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "httpx2>=2.0",      # FastAPI's TestClient
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+# Resumap runs from a checkout: the UI in frontend/ and the data in data/ sit
+# beside the package, not inside it. An editable install (`uv sync`,
+# `pip install -e .`) is the supported way in.
+[tool.hatch.build.targets.wheel]
+packages = ["backend/resumap"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["backend", "."]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning:starlette.*"]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["backend", "."]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import order
+    "B",        # bugbear
+    "UP",       # pyupgrade
+    "BLE",      # blind except: every broad catch says why in its noqa
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares parameters with calls in their defaults.
+extend-immutable-calls = ["fastapi.File", "fastapi.Form", "fastapi.Depends"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prompt text is tuned by hand and pinned by tests/golden/prompts; long lines
+# inside it are content, not style.
+"backend/resumap/llm/{prompts,outreach,corrections,tagging,bullets}.py" = ["E501"]
+# conftest has to set the environment before anything imports resumap.config.
+"tests/conftest.py" = ["E402"]
+
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = ["backend"]
+packages = ["resumap"]
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["pdfplumber.*", "reportlab.*", "docx.*", "claude_agent_sdk.*"]
+ignore_missing_imports = true

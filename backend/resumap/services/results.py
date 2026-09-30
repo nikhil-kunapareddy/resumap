@@ -12,8 +12,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..domain import (Block, BoxMode, ChatRole, JDPoint, Layout, OutreachDraft, Rewrite,
-                      RewriteMode, Substitution)
+from ..domain import (
+    Block,
+    BoxMode,
+    ChatRole,
+    JDPoint,
+    Layout,
+    OutreachDraft,
+    Rewrite,
+    RewriteMode,
+    Substitution,
+)
 
 
 class Envelope(BaseModel):
@@ -156,9 +165,12 @@ class TransformOut(Envelope):
     rewrites: dict[str, Rewrite]
 
 
+PreviewKind = Literal["rewrite", "experience", "replace"]
+
+
 class PromptPreview(Envelope):
     block_id: str
-    kind: Literal["rewrite", "experience", "replace"]
+    kind: PreviewKind
     mode: RewriteMode
     system: str
     user: str

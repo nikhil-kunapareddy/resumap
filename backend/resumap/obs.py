@@ -182,7 +182,7 @@ class timer:
         self.ms = 0.0
         self._t = 0.0
 
-    def __enter__(self) -> "timer":
+    def __enter__(self) -> timer:
         self._t = time.perf_counter()
         return self
 

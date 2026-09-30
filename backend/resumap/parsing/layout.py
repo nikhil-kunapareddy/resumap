@@ -7,7 +7,7 @@ the regenerated PDF reads as the same document.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 BULLET_GLYPHS = "•◦▪▫‣·●■□-–—*o"
@@ -139,7 +139,7 @@ def _rgb_hex(color: Any) -> str:
         return ""
     if max(r, g, b) <= 0.04:
         return ""
-    return "#%02x%02x%02x" % tuple(max(0, min(255, round(v * 255))) for v in (r, g, b))
+    return "#" + "".join(f"{max(0, min(255, round(v * 255))):02x}" for v in (r, g, b))
 
 
 def _link_at(ch: dict, links: list[dict]) -> str:
@@ -361,7 +361,7 @@ def _group_chars_to_lines(chars: list[dict], page_no: int,
             )
         )
 
-    lines.sort(key=lambda l: (l.page, l.top, l.x0))
+    lines.sort(key=lambda ln: (ln.page, ln.top, ln.x0))
     return lines
 
 
@@ -412,13 +412,13 @@ def extract_pdf(path: str) -> ExtractedDoc:
 
     if all_lines:
         g = doc.geometry
-        g.left = max(18.0, min(l.x0 for l in all_lines))
-        g.right = max(18.0, g.width - max(l.x1 for l in all_lines))
-        g.top = max(18.0, min(l.top for l in all_lines if l.page == 0))
+        g.left = max(18.0, min(ln.x0 for ln in all_lines))
+        g.right = max(18.0, g.width - max(ln.x1 for ln in all_lines))
+        g.top = max(18.0, min(ln.top for ln in all_lines if ln.page == 0))
         # Measure the bottom margin too. Assuming a conventional one throws away
         # usable lines: this resume runs its content to 30pt from the foot, and a
         # hardcoded 54pt pushed the last skills lines onto a second page.
-        g.bottom = max(18.0, g.height - max(l.bottom for l in all_lines))
+        g.bottom = max(18.0, g.height - max(ln.bottom for ln in all_lines))
     return doc
 
 
@@ -474,7 +474,7 @@ def extract_docx(path: str) -> ExtractedDoc:
             if r.font.size is not None:
                 size = r.font.size.pt
                 break
-        style = (para.style.name or "").lower()
+        style = ((para.style.name if para.style else "") or "").lower()
         if "heading 1" in style or "title" in style:
             size, bold = 16.0, True
         elif "heading" in style:
@@ -500,7 +500,7 @@ def extract_docx(path: str) -> ExtractedDoc:
 def extract_txt(path: str) -> ExtractedDoc:
     doc = ExtractedDoc()
     y = 54.0
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+    with open(path, encoding="utf-8", errors="replace") as fh:
         for raw in fh:
             text = raw.rstrip()
             if not text.strip():

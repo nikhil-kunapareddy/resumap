@@ -12,9 +12,12 @@ import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel
+
+# How hard the model should think. Each backend maps it onto its own knob.
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ class Backend(ABC):
     @abstractmethod
     async def complete(self, *, model: str, system: str, user: str,
                        schema: type[BaseModel], max_tokens: int,
-                       effort: str) -> Completion:
+                       effort: Effort) -> Completion:
         """One structured request; ``parsed`` is None if nothing validated."""
 
 
@@ -99,8 +102,9 @@ async def run_cli(cmd: list[str], stdin_text: str | None, *, cwd: str,
         out, err = await asyncio.wait_for(
             proc.communicate(stdin_text.encode() if stdin_text is not None else None),
             timeout)
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as exc:
         proc.kill()
         await proc.wait()
-        raise RuntimeError(f"{os.path.basename(cmd[0])} gave no answer within {timeout:.0f}s")
+        raise RuntimeError(
+            f"{os.path.basename(cmd[0])} gave no answer within {timeout:.0f}s") from exc
     return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")

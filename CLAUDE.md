@@ -7,8 +7,8 @@ Resumap is a local, single-user tool: upload a reference resume once, paste a jo
 ## Commands
 
 ```bash
-# setup (once)
-uv venv && uv pip install -r backend/requirements.txt
+# setup (once): .venv from uv.lock, Resumap installed editable, dev tools included
+uv sync --extra dev
 
 # run: re-execs into .venv, serves API and UI on one port, opens a browser
 python3 run.py                    # --no-browser to suppress; RESUMAP_PORT=8077 to move it
@@ -16,15 +16,16 @@ python3 run.py                    # --no-browser to suppress; RESUMAP_PORT=8077 
 # dev with reload (the `resumap` package is only importable from backend/)
 cd backend && ../.venv/bin/uvicorn resumap.main:app --reload
 
-# tests (once: uv pip install -r backend/requirements-dev.txt)
-.venv/bin/python -m pytest                       # whole suite, ~4s
+# checks (CI runs these on Python 3.10-3.13)
+.venv/bin/python -m pytest                       # whole suite, ~6s
 .venv/bin/python -m pytest tests/test_render.py -k budget   # one file / name filter
+.venv/bin/ruff check && .venv/bin/mypy           # lint, types
 RESUMAP_UPDATE_GOLDEN=1 .venv/bin/python -m pytest tests/test_resume_parse.py   # re-pin parser snapshots
 ```
 
 When running anything directly rather than through `run.py` (which re-execs itself), invoke `.venv/bin/python`, not `python3`: here `.venv/bin/python` symlinks to a conda interpreter, so a bare `python3` silently picks up the wrong site-packages.
 
-There is no linter config and no build step. `tests/` is a characterization suite: it pins what the app does today so a refactor can prove it changed nothing. `tests/conftest.py` builds the app per test with `create_app(paths, registry)`: a `tmp_path` of its own for the database, uploads, exports and logs, and a `BackendRegistry` whose every backend name leads to `tests/fakes.FakeBackend`, a scripted `Backend` with a default answer per response schema (`fake.respond("Rewrite", ...)` to override, `fake.down = "reason"` to make it unavailable, `fake.calls` to see exactly what was sent). The env vars are still set before `resumap.config` is imported, so nothing can fall back to `data/` or your `.env`; a `store` fixture opens the same database file. The sample resume is fictional and generated in `tests/fixtures/resumes.py` as PDF, DOCX and TXT; `tests/golden/*.json` snapshot how the parser classifies it and `tests/golden/prompts/` pins every prompt byte for byte. `tests/test_architecture.py` enforces the layering below by reading every module's imports. Known defects are strict `xfail`s, so fixing one fails the run until its marker is removed.
+`pyproject.toml` holds the dependencies (locked in `uv.lock`) and the pytest, ruff and mypy config; there is no build step. `tests/` is a characterization suite: it pins what the app does today so a refactor can prove it changed nothing. `tests/conftest.py` builds the app per test with `create_app(paths, registry)`: a `tmp_path` of its own for the database, uploads, exports and logs, and a `BackendRegistry` whose every backend name leads to `tests/fakes.FakeBackend`, a scripted `Backend` with a default answer per response schema (`fake.respond("Rewrite", ...)` to override, `fake.down = "reason"` to make it unavailable, `fake.calls` to see exactly what was sent). The env vars are still set before `resumap.config` is imported, so nothing can fall back to `data/` or your `.env`; a `store` fixture opens the same database file. The sample resume is fictional and generated in `tests/fixtures/resumes.py` as PDF, DOCX and TXT; `tests/golden/*.json` snapshot how the parser classifies it and `tests/golden/prompts/` pins every prompt byte for byte. `tests/test_architecture.py` enforces the layering below by reading every module's imports. Known defects are strict `xfail`s, so fixing one fails the run until its marker is removed.
 
 Diagnostics: `GET /api/debug/parse/{resume_id}` is the block-classification table — every block with its kind, section, flags and the rule that excluded it from being a point (also written to `data/logs/parse/<id>.txt` on upload). `GET /api/debug/usage` gives tokens and cost by operation.
 

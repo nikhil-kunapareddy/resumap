@@ -9,7 +9,7 @@ from ..storage import Store
 from .base import Service, stored_meta
 from .documents import entry_context, placements
 from .errors import Invalid, Unavailable
-from .results import PromptPreview, TransformOut
+from .results import PreviewKind, PromptPreview, TransformOut, TransformResult
 
 
 class RewriteService(Service):
@@ -68,7 +68,8 @@ class RewriteService(Service):
                 self.store.rewrites.save(job_id, bid, original=original,
                                          rewritten=res["rewritten"],
                                          status=RewriteStatus.PENDING, meta=meta)
-        return TransformOut(results=results, rewrites=self.store.rewrites.for_job(job_id))
+        return TransformOut(results=[TransformResult(**r) for r in results],
+                            rewrites=self.store.rewrites.for_job(job_id))
 
     def preview(self, job_id: int, block_id: str) -> PromptPreview:
         """The exact system prompt and message Transform would send for one box."""
@@ -78,7 +79,7 @@ class RewriteService(Service):
         if not calls:
             raise Invalid("That box is not mapped to any JD point yet.")
         call = calls[0]
-        kind = call.get("kind") or "rewrite"
+        kind: PreviewKind = call.get("kind") or "rewrite"
         system, user = self.gateway.request(kind, call["args"])
         return PromptPreview(block_id=block_id, kind=kind, mode=job.mode, system=system,
                              user=user)

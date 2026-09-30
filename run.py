@@ -39,8 +39,8 @@ def main() -> None:
     except ModuleNotFoundError:
         sys.exit(
             "Dependencies are not installed.\n"
-            "Run:  uv venv && uv pip install -r backend/requirements.txt\n"
-            "  or: python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt"
+            "Run:  uv sync\n"
+            "  or: python3 -m venv .venv && .venv/bin/pip install -e ."
         )
 
     sys.path.insert(0, str(BACKEND_DIR))

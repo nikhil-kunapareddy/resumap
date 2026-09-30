@@ -16,9 +16,24 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from ..domain import (BoxMode, ChatMessage, ChatRole, Experience, ExperienceKind, Job,
-                      JobSummary, OutreachDraft, OutreachExample, OutreachKind, Resume,
-                      ResumeSummary, Rewrite, RewriteMode, RewriteStatus, experience_key)
+from ..domain import (
+    BoxMode,
+    ChatMessage,
+    ChatRole,
+    Experience,
+    ExperienceKind,
+    Job,
+    JobSummary,
+    OutreachDraft,
+    OutreachExample,
+    OutreachKind,
+    Resume,
+    ResumeSummary,
+    Rewrite,
+    RewriteMode,
+    RewriteStatus,
+    experience_key,
+)
 from .database import Database
 
 T = TypeVar("T")

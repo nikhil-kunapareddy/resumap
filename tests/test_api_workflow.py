@@ -12,7 +12,6 @@ import pdfplumber
 import pytest
 
 from resumap.rendering.pdfgen import LAYOUT_DEFAULTS
-from tests.conftest import upload
 from tests.fakes import EXPERIENCE_TEXT, INVENTED_TERM, REPLACED_TEXT, tailored
 from tests.fixtures.resumes import BULLETS, JOB_DESCRIPTION, JOB_POINTS
 
@@ -300,7 +299,8 @@ def test_accept_all_accepts_only_what_is_pending(client, transformed):
 def test_export_applies_accepted_and_edited_rewrites_only(client, resume, transformed):
     job = transformed
     patch_rewrite(client, job, "bul005", status="accepted")
-    patch_rewrite(client, job, "bul009", text="Designed a PostgreSQL model that cut query times tenfold.")
+    patch_rewrite(client, job, "bul009",
+                  text="Designed a PostgreSQL model that cut query times tenfold.")
     out, text = export(client, job)
     assert (out["applied"], out["total"], out["pages"]) == (2, 3, 1)
     assert out["check"]["ok"] is True

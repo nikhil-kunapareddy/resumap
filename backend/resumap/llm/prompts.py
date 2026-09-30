@@ -31,7 +31,7 @@ EDITABLE_PROMPTS = {
 
 
 
-MODE_RULES = {
+MODE_RULES: dict[str, str] = {
     RewriteMode.TRUTHFUL: """MODE: TRUTHFUL REALIGN (most conservative)
 - Every fact, metric, number, scale and named tool in the rewrite must appear in
   the original bullet. Introduce NOTHING new.

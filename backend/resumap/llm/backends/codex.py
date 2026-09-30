@@ -35,7 +35,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Usage, cli_env, run_cli
+from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
 
 TIMEOUT_S = 300
 
@@ -135,7 +135,7 @@ class CodexBackend(Backend):
 
     async def complete(self, *, model: str, system: str, user: str,
                        schema: type[BaseModel], max_tokens: int,
-                       effort: str) -> Completion:
+                       effort: Effort) -> Completion:
         cli = self._cli_path()
         if cli is None:
             raise RuntimeError(self.unavailable() or "codex not found")
@@ -155,7 +155,8 @@ class CodexBackend(Backend):
             if model:
                 cmd += ["-m", model]
             cmd.append("-")  # the prompt comes on stdin
-            code, stdout, stderr = await run_cli(cmd, prompt, cwd=tmp, env=cli_env(self._dotenv_keys),
+            code, stdout, stderr = await run_cli(cmd, prompt, cwd=tmp,
+                                                 env=cli_env(self._dotenv_keys),
                                                  timeout=TIMEOUT_S)
 
         ev = _read_events(stdout)

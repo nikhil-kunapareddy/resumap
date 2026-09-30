@@ -12,8 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ..llm import BackendUnavailable
-from ..services.errors import (Conflict, Invalid, NotFound, ServiceError, Unavailable,
-                               UpstreamFailed)
+from ..services.errors import Conflict, Invalid, NotFound, ServiceError, Unavailable, UpstreamFailed
 from .schemas import ErrorOut
 
 STATUS: dict[type[ServiceError], int] = {

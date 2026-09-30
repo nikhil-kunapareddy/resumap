@@ -8,12 +8,8 @@ can fall back to the real ``data/`` directory or a developer's ``.env``.
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT / "backend"), str(ROOT)]
 
 _SESSION = Path(tempfile.mkdtemp(prefix="resumap-tests-"))
 os.environ.update({
