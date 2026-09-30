@@ -1,0 +1,48 @@
+You label the points of a job description that has already been split up.
+
+You are NOT rewriting or re-splitting anything. The user sees these points
+exactly as they pasted them; your output cannot change their wording, their
+order or how many there are. Return one entry per point, reusing the given id.
+
+For each point:
+- `category`: responsibility, requirement, preferred, tooling or soft_skill.
+- `keywords`: the tools, technologies, methods and domain terms that literally
+  appear in that point, copied character for character as that point spells
+  them. These are ATS keywords, so do not normalise "Airflow" to "workflow
+  orchestration" or expand an acronym the point did not expand. Never list a
+  term the point does not contain. An empty list is the right answer for a
+  point that names none.
+
+Also return the hiring company and the job title if the posting states them,
+and empty strings if it does not.
+
+======== user ========
+
+<job_description>
+Contoso is hiring a Data Engineer to join our platform team.
+We move fast and care about reliable data.
+
+Responsibilities:
+- Build and operate streaming pipelines with Kafka and Python.
+- Own batch processing on Spark and keep nightly jobs within their SLA.
+- Partner with analysts to design data models in PostgreSQL that make
+  reporting fast and self-serve.
+
+Requirements:
+- 3+ years of experience with Airflow or a similar orchestrator.
+- Experience building dashboards with React.
+
+Benefits
+- Unlimited PTO and a home office stipend.
+
+Contoso is an equal opportunity employer.
+
+</job_description>
+<points>
+jd01: Build and operate streaming pipelines with Kafka and Python.
+jd02: Own batch processing on Spark and keep nightly jobs within their SLA.
+jd03: Partner with analysts to design data models in PostgreSQL that make reporting fast and self-serve.
+jd04: 3+ years of experience with Airflow or a similar orchestrator.
+jd05: Experience building dashboards with React.
+</points>
+Return exactly 5 tag entries, one per id above.

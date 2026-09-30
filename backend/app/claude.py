@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from . import backends, obs
 from .config import LOG_DIR
+from .domain import ExperienceKind, OutreachKind, RewriteMode
 from .parsing.jd import guess_company, guess_role, parse_jd_verbatim
 
 
@@ -310,7 +311,7 @@ class Rewrite(BaseModel):
 
 
 MODE_RULES = {
-    "truthful": """MODE: TRUTHFUL REALIGN (most conservative)
+    RewriteMode.TRUTHFUL: """MODE: TRUTHFUL REALIGN (most conservative)
 - Every fact, metric, number, scale and named tool in the rewrite must appear in
   the original bullet. Introduce NOTHING new.
 - You may change: word choice, verb strength, clause order, framing, tone, and
@@ -319,7 +320,7 @@ MODE_RULES = {
   original already says.
 - Never add a tool, platform, team size, or metric that is not in the original.""",
 
-    "bridge": """MODE: REALIGN + BRIDGE SYNONYMS
+    RewriteMode.BRIDGE: """MODE: REALIGN + BRIDGE SYNONYMS
 - Preserve every metric and outcome from the original exactly.
 - You MAY re-express an existing tool or method using the JD's equivalent term
   when they are functionally the same class of thing (e.g. a hand-rolled
@@ -329,7 +330,7 @@ MODE_RULES = {
 - Record every bridge in `substitutions` with grounded=false.
 - Never invent a metric, a team, or a domain the original does not mention.""",
 
-    "aggressive": """MODE: AGGRESSIVE KEYWORD ALIGNMENT (maximum ATS overlap)
+    RewriteMode.AGGRESSIVE: """MODE: AGGRESSIVE KEYWORD ALIGNMENT (maximum ATS overlap)
 - Priority is maximising literal overlap with the JD's keywords and phrasing.
 - You MAY introduce tools, frameworks and terminology from the mapped JD points
   into the bullet, even when the original does not name them, where it is
@@ -651,14 +652,14 @@ class NewBullet(BaseModel):
 
 
 EXPERIENCE_KINDS = {
-    "project": "Project",
-    "work": "Work experience",
-    "soft_skill": "Soft skill",
-    "other": "Other",
+    ExperienceKind.PROJECT: "Project",
+    ExperienceKind.WORK: "Work experience",
+    ExperienceKind.SOFT_SKILL: "Soft skill",
+    ExperienceKind.OTHER: "Other",
 }
 
 # Where a bullet goes when the model's placement names nothing on the page.
-DEFAULT_SECTION = {"project": "PROJECTS"}
+DEFAULT_SECTION = {ExperienceKind.PROJECT: "PROJECTS"}
 
 NEW_BULLET_SYSTEM = """You write ONE new resume bullet from an experience the candidate describes in their
 own words, aimed at specific job-description points.
@@ -812,7 +813,7 @@ LINKEDIN_LIMIT = 300
 
 # Liked messages the user keeps as style references, per kind. Only the newest
 # few go into a prompt: past that they cost tokens without adding a new voice.
-OUTREACH_EXAMPLE_KINDS = ("linkedin", "email")
+OUTREACH_EXAMPLE_KINDS = tuple(OutreachKind)
 OUTREACH_EXAMPLE_LIMIT = 5
 
 

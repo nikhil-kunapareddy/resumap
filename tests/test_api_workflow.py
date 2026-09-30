@@ -139,10 +139,12 @@ def test_job_detail_carries_everything_the_ui_needs(client, job):
     assert detail["resume"]["name"] == "Jane Doe"
 
 
-def test_patching_a_job_updates_only_what_was_sent(client, job):
+def test_patching_a_job_changes_only_what_was_sent_and_returns_the_job(client, job):
     r = client.patch(f"/api/jobs/{job['id']}", json={"role": "Staff Data Engineer",
                                                      "mode": "truthful"})
-    assert r.json() == {"ok": True, "role": "Staff Data Engineer", "mode": "truthful"}
+    assert set(r.json()) == {"id", "resume_id", "company", "role", "mode", "created_at"}
+    assert (r.json()["id"], r.json()["company"], r.json()["role"], r.json()["mode"]) == (
+        job["id"], "Contoso", "Staff Data Engineer", "truthful")
     detail = client.get(f"/api/jobs/{job['id']}").json()
     assert (detail["company"], detail["role"], detail["mode"]) == (
         "Contoso", "Staff Data Engineer", "truthful")
@@ -177,7 +179,7 @@ def test_box_modes(client, job):
     url = f"/api/jobs/{job['id']}/box-modes"
     assert client.post(url, json={"block_id": "bul006", "mode": "replace"}).status_code == 200
     assert client.get(f"/api/jobs/{job['id']}").json()["box_modes"] == {"bul006": "replace"}
-    assert client.post(url, json={"block_id": "bul006", "mode": "banana"}).status_code == 400
+    assert client.post(url, json={"block_id": "bul006", "mode": "banana"}).status_code == 422
     assert client.post(url, json={"block_id": "exp001", "mode": "replace"}).status_code == 400
     assert client.post(url, json={"block_id": "bul006", "mode": ""}).status_code == 200
     assert client.get(f"/api/jobs/{job['id']}").json()["box_modes"] == {}
@@ -209,7 +211,7 @@ def test_transform_realigns_replaces_and_writes_from_experiences(client, fake, r
     assert realigned["original"] == text_of(resume, "bul005")
     assert realigned["rewritten"] == tailored(text_of(resume, "bul005"))
     assert realigned["meta"]["substitutions"][0]["grounded"] is False
-    assert "replaced" not in realigned["meta"]
+    assert realigned["meta"]["replaced"] is False
 
     replaced = rws["bul006"]
     assert replaced["rewritten"] == REPLACED_TEXT and replaced["meta"]["replaced"] is True
@@ -275,14 +277,15 @@ def test_review_status_changes(client, transformed):
     assert r.status_code == 200 and r.json()["status"] == "accepted"
     r = patch_rewrite(client, job, "bul009", text="  Designed a PostgreSQL model.  ")
     assert (r.json()["status"], r.json()["rewritten"]) == ("edited", "Designed a PostgreSQL model.")
-    assert patch_rewrite(client, job, "bul010", status="banana").status_code == 400
+    assert patch_rewrite(client, job, "bul010", status="banana").status_code == 422
     assert patch_rewrite(client, job, "bul013", status="accepted").status_code == 404
 
 
-@pytest.mark.xfail(strict=True, reason="status is not validated when text is sent with it")
 def test_an_unknown_status_is_rejected_even_with_text(client, transformed):
+    before = rewrites(client, transformed)["bul005"]
     r = patch_rewrite(client, transformed, "bul005", text="New text.", status="banana")
-    assert r.status_code == 400
+    assert r.status_code == 422 and r.json()["detail"].startswith("status: ")
+    assert rewrites(client, transformed)["bul005"] == before
 
 
 def test_accept_all_accepts_only_what_is_pending(client, transformed):
@@ -433,23 +436,23 @@ def test_liked_messages_are_kept_and_sent_as_style_references(client, fake, job)
     assert client.delete(f"/api/outreach-examples/{example['id']}").status_code == 404
 
 
-@pytest.mark.parametrize("payload", [
-    {"kind": "tweet", "body": "A long enough message body to pass the length check."},
-    {"kind": "email", "body": "Too short."},
-    {"kind": "email", "body": "x" * 4001},
+@pytest.mark.parametrize("payload, status", [
+    ({"kind": "tweet", "body": "A long enough message body to pass the length check."}, 422),
+    ({"kind": "email", "body": "Too short."}, 400),
+    ({"kind": "email", "body": "x" * 4001}, 400),
 ])
-def test_outreach_examples_are_validated(client, payload):
-    assert client.post("/api/outreach-examples", json=payload).status_code == 400
+def test_outreach_examples_are_validated(client, payload, status):
+    assert client.post("/api/outreach-examples", json=payload).status_code == status
 
 
 # -- experiences ------------------------------------------------------------
 
-@pytest.mark.parametrize("payload", [
-    {"kind": "hobby", "text": "Ran a marathon in under four hours."},
-    {"kind": "project", "text": "Too short."},
+@pytest.mark.parametrize("payload, status", [
+    ({"kind": "hobby", "text": "Ran a marathon in under four hours."}, 422),
+    ({"kind": "project", "text": "Too short."}, 400),
 ])
-def test_experiences_are_validated(client, payload):
-    assert client.post("/api/experiences", json=payload).status_code == 400
+def test_experiences_are_validated(client, payload, status):
+    assert client.post("/api/experiences", json=payload).status_code == status
 
 
 def test_deleting_an_experience_unpicks_it_in_every_job(client, resume, job):

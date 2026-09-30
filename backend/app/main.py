@@ -8,23 +8,29 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
 from . import backends, claude, db, obs, report
+from .api.schemas import (BackendBody, BackendsOut, BackendTestOut, BoxModeBody, BoxModeSaved,
+                          ChatBody, ChatMessageOut, ChatState, ErrorOut, ExperienceCreate,
+                          ExperienceDeleted, ExportOut, FitOut, JobCreate, JobCreated,
+                          JobDetail, JobPatch, JobSummary, MappingBody, MappingSaved, ModelBody,
+                          Ok, OutreachBody, OutreachExampleCreate, OutreachOut, OutreachPatch,
+                          PointsKept, PointsKeep, PromptBody, PromptInfo, PromptPreview,
+                          PromptsOut, ResumeOut, ResumeSummary, RewritePatch, SettingsBody,
+                          SettingsOut, StatusOut, TransformBody, TransformOut, UsageOut)
 from .config import (BACKEND, DEFAULT_FIRST_NAME, EXPORT_DIR, FRONTEND_DIR,
                      LOG_DIR, LOG_LEVEL, UPLOAD_DIR, ensure_dirs)
+from .domain import INCLUDED_STATUSES, Experience, OutreachExample, Rewrite
 from .parsing.resume import parse_resume
 from .pdfgen import (clean_layout, export_filename, insert_blocks, line_budget,
                      new_bullet_budget, render_resume)
 
 ALLOWED_EXT = {".pdf", ".docx", ".txt", ".md"}
-INCLUDED_STATUSES = ("accepted", "edited")
-# Per-box modes that override the job's. "replace" writes the bullet from
-# scratch for its JD points; see claude.replace_bullet.
-BOX_MODES = ("replace",)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -46,7 +52,11 @@ async def lifespan(_app: FastAPI):
     obs.event("app.stop", **obs.totals())
 
 
-app = FastAPI(title="Resumap", lifespan=lifespan)
+# Every error body is {"detail": "<one readable sentence>"}: the UI shows
+# `detail` as the message. Declaring 422 here replaces FastAPI's default
+# validation-error schema, which this app does not send.
+app = FastAPI(title="Resumap", lifespan=lifespan,
+              responses={422: {"model": ErrorOut, "description": "Invalid request"}})
 
 
 @app.middleware("http")
@@ -71,114 +81,24 @@ async def _log_requests(request: Request, call_next):
 
 
 # --------------------------------------------------------------------------
-# request bodies
-# --------------------------------------------------------------------------
-
-class JobCreate(BaseModel):
-    resume_id: int
-    text: str
-    mode: str = "aggressive"
-
-
-class JobPatch(BaseModel):
-    company: str | None = None
-    role: str | None = None
-    mode: str | None = None
-
-
-class PointsKeep(BaseModel):
-    keep: list[str]
-
-
-class MappingBody(BaseModel):
-    block_id: str
-    point_ids: list[str]
-
-
-class BoxModeBody(BaseModel):
-    block_id: str
-    mode: str = ""   # one of BOX_MODES, or "" for the job's own mode
-
-
-class TransformBody(BaseModel):
-    block_ids: list[str] | None = None
-    extra: str = ""
-
-
-class RewritePatch(BaseModel):
-    text: str | None = None
-    status: str | None = None
-    # Where a bullet written from an experience goes: see pdfgen.insert_blocks.
-    placement: str | None = None
-
-
-class ExperienceCreate(BaseModel):
-    kind: str = "project"
-    title: str = ""
-    text: str
-
-
-class OutreachBody(BaseModel):
-    recruiter: str = ""
-    extra: str = ""
-
-
-class OutreachPatch(BaseModel):
-    recruiter: str | None = None
-    linkedin: str | None = None
-    linkedin_subject: str | None = None
-    email_subject: str | None = None
-    email_body: str | None = None
-
-
-class OutreachExampleCreate(BaseModel):
-    kind: str
-    subject: str = ""
-    body: str
-
-
-class SettingsBody(BaseModel):
-    first_name: str
-
-
-class ChatBody(BaseModel):
-    message: str
-
-
-class BackendBody(BaseModel):
-    backend: str
-    # Blank means the backend's default: RESUMAP_MODEL for the Anthropic ones,
-    # the CLI's own configured model for Codex and Pi.
-    model: str = ""
-
-
-class ModelBody(BaseModel):
-    model: str = ""
-
-
-class PromptBody(BaseModel):
-    text: str
-
-
-# --------------------------------------------------------------------------
 # status & settings
 # --------------------------------------------------------------------------
 
 @app.get("/api/status")
-def status() -> dict:
+def status() -> StatusOut:
     why = claude.backend_status()
     try:
         label = backends.get().LABEL
     except Exception:  # noqa: BLE001 - an unknown name; `detail` says so
         label = backends.current_name()
-    return {
-        "backend": backends.current_name(),
-        "label": label,
-        "ready": why is None,
-        "detail": why,
-        "model": backends.model_label(),
-        "first_name": db.get_setting("first_name", DEFAULT_FIRST_NAME),
-    }
+    return StatusOut(
+        backend=backends.current_name(),
+        label=label,
+        ready=why is None,
+        detail=why,
+        model=backends.model_label(),
+        first_name=db.get_setting("first_name", DEFAULT_FIRST_NAME),
+    )
 
 
 def _apply_backend_settings() -> None:
@@ -190,13 +110,13 @@ def _apply_backend_settings() -> None:
 
 
 @app.get("/api/backends")
-def list_backends() -> dict:
+def list_backends() -> BackendsOut:
     """Every backend and whether it can run, for the settings panel."""
-    return {"selected": backends.current_name(), "backends": backends.describe()}
+    return BackendsOut(selected=backends.current_name(), backends=backends.describe())
 
 
 @app.post("/api/backends/{name}/test")
-async def test_backend(name: str, body: ModelBody | None = None) -> dict:
+async def test_backend(name: str, body: ModelBody | None = None) -> BackendTestOut:
     """Make one tiny real call through a backend, without switching to it.
     `body.model`, when given, is tried instead of the saved one."""
     if name not in backends.MODULES:
@@ -206,11 +126,11 @@ async def test_backend(name: str, body: ModelBody | None = None) -> dict:
     hint = backends.suggest_model(name, model or "")
     if not out["ok"] and hint:
         out["detail"] += f" Did you mean {hint}?"
-    return out
+    return BackendTestOut(**out)
 
 
 @app.post("/api/backends")
-async def choose_backend(body: BackendBody) -> dict:
+async def choose_backend(body: BackendBody) -> StatusOut:
     """Switch the live backend. Takes effect on the next model call; nothing
     already stored (rewrites, drafts) is touched.
 
@@ -235,15 +155,15 @@ async def choose_backend(body: BackendBody) -> dict:
     backends.select(body.backend, {body.backend: model})
     out = status()
     obs.event("settings.backend", backend=body.backend,
-              model=backends.model_label(), ready=out["ready"])
+              model=backends.model_label(), ready=out.ready)
     return out
 
 
 @app.post("/api/settings")
-def save_settings(body: SettingsBody) -> dict:
+def save_settings(body: SettingsBody) -> SettingsOut:
     name = re.sub(r"[^A-Za-z0-9]", "", body.first_name).lower() or "resume"
     db.set_setting("first_name", name)
-    return {"first_name": name}
+    return SettingsOut(first_name=name)
 
 
 # --------------------------------------------------------------------------
@@ -254,12 +174,16 @@ PROMPT_MAX_CHARS = 20000
 
 
 @app.get("/api/prompts")
-def prompts() -> dict:
-    return {"prompts": claude.list_prompts()}
+def prompts() -> PromptsOut:
+    return PromptsOut(prompts=claude.list_prompts())
+
+
+def _prompt_info(key: str) -> PromptInfo:
+    return PromptInfo(**next(x for x in claude.list_prompts() if x["key"] == key))
 
 
 @app.put("/api/prompts/{key}")
-def save_prompt(key: str, body: PromptBody) -> dict:
+def save_prompt(key: str, body: PromptBody) -> PromptInfo:
     """Replace the instructions for `key`. Text identical to the default, or
     blank, is a reset: there is then nothing custom left to keep."""
     if key not in claude.EDITABLE_PROMPTS:
@@ -274,17 +198,17 @@ def save_prompt(key: str, body: PromptBody) -> dict:
     claude.set_prompt_overrides(db.settings_with_prefix("prompt."))
     custom = key in claude._prompt_overrides
     obs.event("prompt.saved", key=key, custom=custom, **obs.tmeta(text, "prompt"))
-    return next(x for x in claude.list_prompts() if x["key"] == key)
+    return _prompt_info(key)
 
 
 @app.delete("/api/prompts/{key}")
-def reset_prompt(key: str) -> dict:
+def reset_prompt(key: str) -> PromptInfo:
     if key not in claude.EDITABLE_PROMPTS:
         raise HTTPException(404, f"No editable prompt called '{key}'.")
     db.delete_setting(f"prompt.{key}")
     claude.set_prompt_overrides(db.settings_with_prefix("prompt."))
     obs.event("prompt.reset", key=key)
-    return next(x for x in claude.list_prompts() if x["key"] == key)
+    return _prompt_info(key)
 
 
 # --------------------------------------------------------------------------
@@ -292,12 +216,12 @@ def reset_prompt(key: str) -> dict:
 # --------------------------------------------------------------------------
 
 @app.get("/api/resumes")
-def resumes() -> list[dict]:
-    return db.list_resumes()
+def resumes() -> list[ResumeSummary]:
+    return [ResumeSummary(**r) for r in db.list_resumes()]
 
 
 @app.post("/api/resumes")
-async def upload_resume(file: UploadFile = File(...), label: str = Form("")) -> dict:
+async def upload_resume(file: UploadFile = File(...), label: str = Form("")) -> ResumeOut:
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXT:
         raise HTTPException(400, f"Unsupported file type '{ext}'. Use PDF, DOCX, TXT or MD.")
@@ -324,9 +248,10 @@ async def upload_resume(file: UploadFile = File(...), label: str = Form("")) -> 
         raise HTTPException(400, "No text found in that file. If it is a scanned PDF, it needs OCR first.")
 
     resume_label = label.strip() or Path(file.filename or "resume").stem
+    filename = file.filename or safe
     rid = db.add_resume(
         label=resume_label,
-        filename=file.filename or safe,
+        filename=filename,
         stored_path=str(stored),
         person=doc.get("name", ""),
         doc=doc,
@@ -335,37 +260,36 @@ async def upload_resume(file: UploadFile = File(...), label: str = Form("")) -> 
     obs.event("resume.stored", resume_id=rid,
               points=sum(1 for b in doc["blocks"] if b["mappable"]),
               report=str(written.name) if written else None)
-    return {"id": rid, **_public_resume(doc)}
+    return _resume_out(rid, resume_label, filename, doc)
 
 
-def _public_resume(doc: dict) -> dict:
-    """Strip internal layout metadata before sending to the browser."""
-    return {
-        "diagnostics": doc.get("diagnostics") or {},
-        "name": doc.get("name", ""),
-        "sections": doc.get("sections", []),
-        "blocks": [
-            {k: v for k, v in b.items() if k != "_line"} for b in doc.get("blocks", [])
-        ],
-    }
+def _resume_out(rid: int, label: str, filename: str, doc: dict) -> ResumeOut:
+    """A stored resume for the browser, without the geometry only the renderer reads."""
+    return ResumeOut(
+        id=rid, label=label, filename=filename,
+        diagnostics=doc.get("diagnostics") or {},
+        name=doc.get("name", ""),
+        sections=doc.get("sections", []),
+        blocks=[{k: v for k, v in b.items() if k != "_line"} for b in doc.get("blocks", [])],
+    )
 
 
 @app.get("/api/resumes/{resume_id}")
-def resume_detail(resume_id: int) -> dict:
+def resume_detail(resume_id: int) -> ResumeOut:
     r = db.get_resume(resume_id)
     if not r:
         raise HTTPException(404, "Resume not found")
-    return {"id": r["id"], "label": r["label"], "filename": r["filename"], **_public_resume(r["doc"])}
+    return _resume_out(r["id"], r["label"], r["filename"], r["doc"])
 
 
 @app.delete("/api/resumes/{resume_id}")
-def resume_delete(resume_id: int) -> dict:
+def resume_delete(resume_id: int) -> Ok:
     r = db.get_resume(resume_id)
     if not r:
         raise HTTPException(404, "Resume not found")
     Path(r["stored_path"]).unlink(missing_ok=True)
     db.delete_resume(resume_id)
-    return {"ok": True}
+    return Ok()
 
 
 # --------------------------------------------------------------------------
@@ -373,31 +297,29 @@ def resume_delete(resume_id: int) -> dict:
 # --------------------------------------------------------------------------
 
 @app.get("/api/experiences")
-def experiences() -> list[dict]:
-    return db.list_experiences()
+def experiences() -> list[Experience]:
+    return [Experience(**e) for e in db.list_experiences()]
 
 
 @app.post("/api/experiences")
-def add_experience(body: ExperienceCreate) -> dict:
+def add_experience(body: ExperienceCreate) -> Experience:
     text = body.text.strip()
-    if body.kind not in claude.EXPERIENCE_KINDS:
-        raise HTTPException(400, f"Unknown experience type '{body.kind}'.")
     if len(text) < 15:
         raise HTTPException(400, "Describe the experience in at least a sentence: "
                                  "what you did, with what, and what came of it.")
     eid = db.add_experience(body.kind, body.title.strip()[:80], text)
     obs.event("experience.added", id=eid, kind=body.kind,
               has_title=bool(body.title.strip()), **obs.tmeta(text, "exp"))
-    return next(e for e in db.list_experiences() if e["id"] == eid)
+    return Experience(**next(e for e in db.list_experiences() if e["id"] == eid))
 
 
 @app.delete("/api/experiences/{experience_id}")
-def delete_experience(experience_id: int) -> dict:
+def delete_experience(experience_id: int) -> ExperienceDeleted:
     if not any(e["id"] == experience_id for e in db.list_experiences()):
         raise HTTPException(404, "Experience not found")
     gone = db.delete_experience(experience_id)
     obs.event("experience.deleted", id=experience_id, **gone)
-    return {"ok": True, **gone}
+    return ExperienceDeleted(**gone)
 
 
 # --------------------------------------------------------------------------
@@ -405,12 +327,12 @@ def delete_experience(experience_id: int) -> dict:
 # --------------------------------------------------------------------------
 
 @app.get("/api/jobs")
-def jobs(resume_id: int | None = None) -> list[dict]:
-    return db.list_jobs(resume_id)
+def jobs(resume_id: int | None = None) -> list[JobSummary]:
+    return [JobSummary(**j) for j in db.list_jobs(resume_id)]
 
 
 @app.post("/api/jobs")
-async def create_job(body: JobCreate) -> dict:
+async def create_job(body: JobCreate) -> JobCreated:
     if not db.get_resume(body.resume_id):
         raise HTTPException(404, "Resume not found")
     if len(body.text.strip()) < 40:
@@ -432,56 +354,58 @@ async def create_job(body: JobCreate) -> dict:
         points=parsed["points"],
         mode=body.mode,
     )
-    return {
-        "id": jid,
-        "company": parsed["company"],
-        "role": parsed["role"],
-        "points": parsed["points"],
-        "mode": body.mode,
-        "source": parsed.get("source", "claude"),
-        "warning": parsed.get("warning"),
-    }
+    return JobCreated(
+        id=jid,
+        company=parsed["company"],
+        role=parsed["role"],
+        points=parsed["points"],
+        mode=body.mode,
+        source=parsed.get("source", "claude"),
+        warning=parsed.get("warning"),
+    )
 
 
 @app.get("/api/jobs/{job_id}")
-def job_detail(job_id: int) -> dict:
+def job_detail(job_id: int) -> JobDetail:
     j = db.get_job(job_id)
     if not j:
         raise HTTPException(404, "Job not found")
     r = db.get_resume(j["resume_id"])
-    return {
-        "id": j["id"],
-        "resume_id": j["resume_id"],
-        "company": j["company"],
-        "role": j["role"],
-        "mode": j["mode"],
-        "raw": j["raw_text"],
-        "points": j["points"],
-        "mappings": db.get_mappings(job_id),
-        "box_modes": db.get_box_modes(job_id),
-        "rewrites": db.get_rewrites(job_id),
-        "outreach": db.get_outreach(job_id),
-        "resume": {"id": r["id"], "label": r["label"], **_public_resume(r["doc"])} if r else None,
-    }
+    return JobDetail(
+        id=j["id"],
+        resume_id=j["resume_id"],
+        company=j["company"],
+        role=j["role"],
+        mode=j["mode"],
+        raw=j["raw_text"],
+        points=j["points"],
+        mappings=db.get_mappings(job_id),
+        box_modes=db.get_box_modes(job_id),
+        rewrites=db.get_rewrites(job_id),
+        outreach=db.get_outreach(job_id),
+        resume=_resume_out(r["id"], r["label"], r["filename"], r["doc"]) if r else None,
+    )
 
 
 @app.patch("/api/jobs/{job_id}")
-def patch_job(job_id: int, body: JobPatch) -> dict:
+def patch_job(job_id: int, body: JobPatch) -> JobSummary:
+    """Change a job's company, role or mode; returns the job as it now stands."""
     if not db.get_job(job_id):
         raise HTTPException(404, "Job not found")
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     db.update_job(job_id, **fields)
-    return {"ok": True, **fields}
+    j = db.get_job(job_id)
+    return JobSummary(**{k: j[k] for k in JobSummary.model_fields})
 
 
 @app.delete("/api/jobs/{job_id}")
-def job_delete(job_id: int) -> dict:
+def job_delete(job_id: int) -> Ok:
     db.delete_job(job_id)
-    return {"ok": True}
+    return Ok()
 
 
 @app.put("/api/jobs/{job_id}/points")
-def set_points(job_id: int, body: PointsKeep) -> dict:
+def set_points(job_id: int, body: PointsKeep) -> PointsKept:
     """Choose which parsed points to carry into mapping.
 
     Dropping is reversible: the point keeps its text and its id and is only
@@ -513,11 +437,11 @@ def set_points(job_id: int, body: PointsKeep) -> dict:
             unwired += len(ids) - len(left)
     obs.event("jd.points_kept", job_id=job_id, kept=len(keep),
               dropped=len(gone), unwired=unwired)
-    return {"ok": True, "points": points, "dropped": sorted(gone), "unwired": unwired}
+    return PointsKept(points=points, dropped=sorted(gone), unwired=unwired)
 
 
 @app.post("/api/jobs/{job_id}/mappings")
-def save_mapping(job_id: int, body: MappingBody) -> dict:
+def save_mapping(job_id: int, body: MappingBody) -> MappingSaved:
     j = db.get_job(job_id)
     if not j:
         raise HTTPException(404, "Job not found")
@@ -531,11 +455,11 @@ def save_mapping(job_id: int, body: MappingBody) -> dict:
     obs.event("map.set", job_id=job_id, block=body.block_id,
               points=body.point_ids, added=len(set(body.point_ids) - set(before)),
               removed=len(set(before) - set(body.point_ids)))
-    return {"ok": True, "block_id": body.block_id, "point_ids": body.point_ids}
+    return MappingSaved(block_id=body.block_id, point_ids=body.point_ids)
 
 
 @app.post("/api/jobs/{job_id}/box-modes")
-def save_box_mode(job_id: int, body: BoxModeBody) -> dict:
+def save_box_mode(job_id: int, body: BoxModeBody) -> BoxModeSaved:
     """Set how one resume box is transformed. Experiences are always new bullets,
     so only a parsed block can be replaced."""
     j = db.get_job(job_id)
@@ -544,11 +468,9 @@ def save_box_mode(job_id: int, body: BoxModeBody) -> dict:
     r = db.get_resume(j["resume_id"])
     if not r or not any(b["id"] == body.block_id for b in r["doc"]["blocks"]):
         raise HTTPException(400, f"'{body.block_id}' is not a box on this resume.")
-    if body.mode and body.mode not in BOX_MODES:
-        raise HTTPException(400, f"Unknown box mode '{body.mode}'.")
     db.set_box_mode(job_id, body.block_id, body.mode)
     obs.event("map.box_mode", job_id=job_id, block=body.block_id, mode=body.mode or "job")
-    return {"ok": True, "block_id": body.block_id, "mode": body.mode}
+    return BoxModeSaved(block_id=body.block_id, mode=body.mode)
 
 
 # --------------------------------------------------------------------------
@@ -556,7 +478,7 @@ def save_box_mode(job_id: int, body: BoxModeBody) -> dict:
 # --------------------------------------------------------------------------
 
 @app.post("/api/jobs/{job_id}/transform")
-async def transform(job_id: int, body: TransformBody) -> dict:
+async def transform(job_id: int, body: TransformBody) -> TransformOut:
     j = db.get_job(job_id)
     if not j:
         raise HTTPException(404, "Job not found")
@@ -601,7 +523,7 @@ async def transform(job_id: int, body: TransformBody) -> dict:
             if bid in replaced:
                 meta["replaced"] = True
         db.save_rewrite(job_id, bid, original, res["rewritten"], "pending", meta)
-    return {"results": results, "rewrites": db.get_rewrites(job_id)}
+    return TransformOut(results=results, rewrites=db.get_rewrites(job_id))
 
 
 def _transform_jobs(j: dict, doc: dict, block_ids: list[str] | None,
@@ -676,7 +598,7 @@ def _transform_jobs(j: dict, doc: dict, block_ids: list[str] | None,
 
 
 @app.get("/api/jobs/{job_id}/prompt")
-def prompt_preview(job_id: int, block_id: str) -> dict:
+def prompt_preview(job_id: int, block_id: str) -> PromptPreview:
     """The exact system prompt and message Transform would send for one box."""
     j = db.get_job(job_id)
     if not j:
@@ -692,8 +614,7 @@ def prompt_preview(job_id: int, block_id: str) -> dict:
     build = {"experience": claude.experience_request,
              "replace": claude.replace_request}.get(kind, claude.rewrite_request)
     system, user = build(**job["args"])
-    return {"block_id": block_id, "kind": kind, "mode": j["mode"],
-            "system": system, "user": user}
+    return PromptPreview(block_id=block_id, kind=kind, mode=j["mode"], system=system, user=user)
 
 
 def _placements(doc: dict) -> list[dict]:
@@ -730,7 +651,7 @@ def _entry_context(doc: dict, block_id: str) -> tuple[str, list[str]]:
 
 
 @app.patch("/api/jobs/{job_id}/rewrites/{block_id}")
-def patch_rewrite(job_id: int, block_id: str, body: RewritePatch) -> dict:
+def patch_rewrite(job_id: int, block_id: str, body: RewritePatch) -> Rewrite:
     existing = db.get_rewrites(job_id).get(block_id)
     if not existing:
         raise HTTPException(404, "No rewrite for that block yet.")
@@ -754,22 +675,20 @@ def patch_rewrite(job_id: int, block_id: str, body: RewritePatch) -> dict:
         db.save_rewrite(job_id, block_id, existing["original"], body.text.strip(),
                         body.status or "edited", existing["meta"])
     elif body.status is not None:
-        if body.status not in ("pending", "accepted", "rejected", "edited"):
-            raise HTTPException(400, f"Unknown status '{body.status}'")
         obs.event("review.status", job_id=job_id, block=block_id,
                   from_status=existing["status"], to_status=body.status)
         db.set_rewrite_status(job_id, block_id, body.status)
-    return db.get_rewrites(job_id)[block_id]
+    return Rewrite(**db.get_rewrites(job_id)[block_id])
 
 
 @app.post("/api/jobs/{job_id}/accept-all")
-def accept_all(job_id: int) -> dict:
+def accept_all(job_id: int) -> dict[str, Rewrite]:
     rws = db.get_rewrites(job_id)
     pending = [bid for bid, rw in rws.items() if rw["status"] == "pending"]
     for bid in pending:
         db.set_rewrite_status(job_id, bid, "accepted")
     obs.event("review.accept_all", job_id=job_id, accepted=len(pending))
-    return db.get_rewrites(job_id)
+    return {bid: Rewrite(**rw) for bid, rw in db.get_rewrites(job_id).items()}
 
 
 # --------------------------------------------------------------------------
@@ -827,7 +746,7 @@ def preview(job_id: int) -> FileResponse:
 
 
 @app.post("/api/jobs/{job_id}/export")
-def export(job_id: int) -> dict:
+def export(job_id: int) -> ExportOut:
     out, name, fit = _build_pdf(job_id, preview=False)
     rewrites = db.get_rewrites(job_id)
     j = db.get_job(job_id)
@@ -841,23 +760,23 @@ def export(job_id: int) -> dict:
                           if rw["status"] in INCLUDED_STATUSES),
               selfcheck_ok=check.get("ok"),
               problems=check.get("problems") or None)
-    return {
-        "check": {k: v for k, v in check.items() if k != "fonts"},
-        "filename": name,
-        "url": f"/api/download/{name}",
-        "applied": sum(1 for rw in rewrites.values() if rw["status"] in INCLUDED_STATUSES),
-        "total": len(rewrites),
-        "pages": fit["pages"],
-        "font_scale": fit["font_scale"],
-        "cramped": fit["cramped"],
-    }
+    return ExportOut(
+        check={k: v for k, v in check.items() if k != "fonts"},
+        filename=name,
+        url=f"/api/download/{name}",
+        applied=sum(1 for rw in rewrites.values() if rw["status"] in INCLUDED_STATUSES),
+        total=len(rewrites),
+        pages=fit["pages"],
+        font_scale=fit["font_scale"],
+        cramped=fit["cramped"],
+    )
 
 
 @app.get("/api/jobs/{job_id}/fit")
-def fit_info(job_id: int) -> dict:
+def fit_info(job_id: int) -> FitOut:
     """How hard the resume had to be squeezed to reach a single page."""
     _out, _name, fit = _build_pdf(job_id, preview=True)
-    return {k: v for k, v in fit.items() if k not in ("path", "blocks")}
+    return FitOut(**{k: v for k, v in fit.items() if k not in ("path", "blocks")})
 
 
 @app.get("/api/download/{filename}")
@@ -914,31 +833,31 @@ def _applied(m: dict) -> bool:
         meta.get("edits") or meta.get("layout"))
 
 
-def _chat_public(job_id: int) -> dict:
+def _chat_public(job_id: int) -> ChatState:
     """Messages without their undo snapshots, the latest applied one undoable."""
     msgs = db.get_chat(job_id)
     last = next((m["id"] for m in reversed(msgs) if _applied(m)), None)
-    return {
-        "messages": [
-            {"id": m["id"], "role": m["role"], "text": m["text"],
-             "meta": {k: v for k, v in (m["meta"] or {}).items() if k != "before"},
-             "can_undo": m["id"] == last}
+    return ChatState(
+        messages=[
+            ChatMessageOut(id=m["id"], role=m["role"], text=m["text"],
+                           meta={k: v for k, v in (m["meta"] or {}).items() if k != "before"},
+                           can_undo=m["id"] == last)
             for m in msgs
         ],
-        "rewrites": db.get_rewrites(job_id),
-        "layout": clean_layout(db.get_layout(job_id)),
-    }
+        rewrites=db.get_rewrites(job_id),
+        layout=clean_layout(db.get_layout(job_id)),
+    )
 
 
 @app.get("/api/jobs/{job_id}/chat")
-def get_chat(job_id: int) -> dict:
+def get_chat(job_id: int) -> ChatState:
     if not db.get_job(job_id):
         raise HTTPException(404, "Job not found")
     return _chat_public(job_id)
 
 
 @app.post("/api/jobs/{job_id}/chat")
-async def chat(job_id: int, body: ChatBody) -> dict:
+async def chat(job_id: int, body: ChatBody) -> ChatState:
     """Apply one correction request to the PDF: block edits and layout changes.
 
     Edits are saved as "edited" rewrites, so they are in the PDF at once and in
@@ -1005,7 +924,7 @@ async def chat(job_id: int, body: ChatBody) -> dict:
 
 
 @app.post("/api/jobs/{job_id}/chat/{message_id}/undo")
-def undo_chat(job_id: int, message_id: int) -> dict:
+def undo_chat(job_id: int, message_id: int) -> ChatState:
     """Put back what one correction replaced. Only the latest applied one, so an
     undo can never silently revert a later change to the same block."""
     msgs = db.get_chat(job_id)
@@ -1061,21 +980,15 @@ def _highlights(doc: dict, rewrites: dict, mappings: dict) -> list[str]:
     return (picked or spare)[:HIGHLIGHT_LIMIT]
 
 
-def _outreach_public(row: dict | None) -> dict | None:
-    if not row:
-        return None
-    return {k: v for k, v in row.items() if k != "job_id"}
-
-
 @app.get("/api/jobs/{job_id}/outreach")
-def get_outreach(job_id: int) -> dict:
+def get_outreach(job_id: int) -> OutreachOut:
     if not db.get_job(job_id):
         raise HTTPException(404, "Job not found")
-    return {"outreach": _outreach_public(db.get_outreach(job_id))}
+    return OutreachOut(outreach=db.get_outreach(job_id))
 
 
 @app.post("/api/jobs/{job_id}/outreach")
-async def make_outreach(job_id: int, body: OutreachBody) -> dict:
+async def make_outreach(job_id: int, body: OutreachBody) -> OutreachOut:
     j = db.get_job(job_id)
     if not j:
         raise HTTPException(404, "Job not found")
@@ -1119,11 +1032,11 @@ async def make_outreach(job_id: int, body: OutreachBody) -> dict:
     obs.event("outreach.done", job_id=job_id, highlights=len(highlights),
               linkedin_chars=len(draft["linkedin"]),
               over_limit=len(draft["linkedin"]) > claude.LINKEDIN_LIMIT)
-    return {"outreach": _outreach_public(db.get_outreach(job_id))}
+    return OutreachOut(outreach=db.get_outreach(job_id))
 
 
 @app.patch("/api/jobs/{job_id}/outreach")
-def patch_outreach(job_id: int, body: OutreachPatch) -> dict:
+def patch_outreach(job_id: int, body: OutreachPatch) -> OutreachOut:
     existing = db.get_outreach(job_id)
     if not existing:
         raise HTTPException(404, "Nothing drafted for this job yet.")
@@ -1134,7 +1047,7 @@ def patch_outreach(job_id: int, body: OutreachPatch) -> dict:
                      existing["meta"],
                      linkedin_subject=merged["linkedin_subject"].strip())
     obs.event("outreach.edited", job_id=job_id, fields=sorted(fields))
-    return {"outreach": _outreach_public(db.get_outreach(job_id))}
+    return OutreachOut(outreach=db.get_outreach(job_id))
 
 
 # Liked messages, shared by every job: the newest few of each kind go into each
@@ -1143,15 +1056,13 @@ EXAMPLE_MAX_CHARS = 4000
 
 
 @app.get("/api/outreach-examples")
-def outreach_examples() -> list[dict]:
-    return db.list_outreach_examples()
+def outreach_examples() -> list[OutreachExample]:
+    return [OutreachExample(**e) for e in db.list_outreach_examples()]
 
 
 @app.post("/api/outreach-examples")
-def add_outreach_example(body: OutreachExampleCreate) -> dict:
+def add_outreach_example(body: OutreachExampleCreate) -> OutreachExample:
     text = body.body.strip()
-    if body.kind not in claude.OUTREACH_EXAMPLE_KINDS:
-        raise HTTPException(400, f"Unknown example type '{body.kind}'.")
     if len(text) < 20:
         raise HTTPException(400, "Paste the whole message you liked, not just a line of it.")
     if len(text) > EXAMPLE_MAX_CHARS:
@@ -1160,15 +1071,15 @@ def add_outreach_example(body: OutreachExampleCreate) -> dict:
     eid = db.add_outreach_example(body.kind, body.subject.strip()[:200], text)
     obs.event("outreach_example.added", id=eid, kind=body.kind,
               has_subject=bool(body.subject.strip()), **obs.tmeta(text, "ex"))
-    return next(e for e in db.list_outreach_examples() if e["id"] == eid)
+    return OutreachExample(**next(e for e in db.list_outreach_examples() if e["id"] == eid))
 
 
 @app.delete("/api/outreach-examples/{example_id}")
-def delete_outreach_example(example_id: int) -> dict:
+def delete_outreach_example(example_id: int) -> Ok:
     if not db.delete_outreach_example(example_id):
         raise HTTPException(404, "Example not found")
     obs.event("outreach_example.deleted", id=example_id)
-    return {"ok": True}
+    return Ok()
 
 
 # --------------------------------------------------------------------------
@@ -1185,10 +1096,10 @@ def debug_parse(resume_id: int) -> str:
 
 
 @app.get("/api/debug/usage")
-def debug_usage() -> dict:
+def debug_usage() -> UsageOut:
     """Token and cost totals for this process, broken down by operation."""
-    return {"model": backends.model_label(), "backend": backends.current_name(),
-            **obs.totals()}
+    return UsageOut(model=backends.model_label(), backend=backends.current_name(),
+                    **obs.totals())
 
 
 # --------------------------------------------------------------------------
@@ -1198,6 +1109,15 @@ def debug_usage() -> dict:
 @app.exception_handler(claude.BackendUnavailable)
 async def _backend_unavailable(_req, exc: claude.BackendUnavailable) -> JSONResponse:
     return JSONResponse({"detail": str(exc)}, status_code=503)
+
+
+@app.exception_handler(RequestValidationError)
+async def _invalid_request(_req, exc: RequestValidationError) -> JSONResponse:
+    """422, with the per-field errors joined into one readable `detail`."""
+    errors = jsonable_encoder(exc.errors())
+    detail = "; ".join(
+        f"{'.'.join(str(p) for p in e['loc'][1:]) or e['loc'][0]}: {e['msg']}" for e in errors)
+    return JSONResponse(ErrorOut(detail=detail, errors=errors).model_dump(), status_code=422)
 
 
 class _NoCacheStatic(StaticFiles):

@@ -92,4 +92,4 @@ def test_a_failing_test_call_reports_why(client, fake):
         raise RuntimeError("401 Unauthorized")
     fake.respond("Ping", unauthorised)
     r = client.post("/api/backends/api/test")
-    assert r.json() == {"ok": False, "detail": "401 Unauthorized"}
+    assert r.json() == {"ok": False, "detail": "401 Unauthorized", "ms": None}
