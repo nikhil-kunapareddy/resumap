@@ -6,6 +6,7 @@ whole API and a client can generate its types from it. They are strict
 name fails its request, and the test suite, rather than shipping it
 undocumented. Optional fields are always present, as null or a default.
 """
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -34,6 +35,7 @@ class Ok(Envelope):
 
 
 # -- status, settings and prompts -------------------------------------------
+
 
 class StatusOut(Envelope):
     backend: str
@@ -83,6 +85,7 @@ class PromptsOut(Envelope):
 
 # -- resumes and experiences ------------------------------------------------
 
+
 class ResumeOut(Envelope):
     """A parsed resume without the source geometry only the renderer needs."""
 
@@ -102,6 +105,7 @@ class ExperienceDeleted(Envelope):
 
 
 # -- jobs, mapping and transform --------------------------------------------
+
 
 class JobCreated(Envelope):
     id: int
@@ -178,6 +182,7 @@ class PromptPreview(Envelope):
 
 # -- export -----------------------------------------------------------------
 
+
 class SelfCheck(Envelope):
     """report.verify_pdf's findings. ``ok`` is null when the check itself failed."""
 
@@ -217,6 +222,7 @@ class FitOut(Envelope):
 
 # -- corrections chat -------------------------------------------------------
 
+
 class ChatMetaOut(BaseModel):
     """What an assistant turn changed. The undo snapshot is never sent."""
 
@@ -243,11 +249,13 @@ class ChatState(Envelope):
 
 # -- outreach ---------------------------------------------------------------
 
+
 class OutreachOut(Envelope):
     outreach: OutreachDraft | None
 
 
 # -- diagnostics ------------------------------------------------------------
+
 
 class UsageOut(Envelope):
     model: str
@@ -259,4 +267,3 @@ class UsageOut(Envelope):
     cached_tokens: int
     cost_usd: float
     by_op: dict[str, dict[str, Any]]
-

@@ -1,4 +1,5 @@
 """Turn extracted lines into a block document: sections, entries, bullets."""
+
 from __future__ import annotations
 
 import re
@@ -14,16 +15,39 @@ URL_RE = re.compile(r"(https?://|www\.|linkedin\.com|github\.com)", re.I)
 DATE_RE = re.compile(
     r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b"
     r"|\b(?:present|current|ongoing)\b"
-    r"|\b(?:19|20)\d{2}\b", re.I
+    r"|\b(?:19|20)\d{2}\b",
+    re.I,
 )
 
 SECTION_WORDS = {
-    "experience", "work experience", "professional experience", "employment",
-    "education", "skills", "technical skills", "projects", "summary",
-    "objective", "profile", "certifications", "certification", "awards",
-    "publications", "achievements", "activities", "leadership", "interests",
-    "coursework", "relevant coursework", "volunteer", "languages", "tools",
-    "research", "training", "affiliations", "contact",
+    "experience",
+    "work experience",
+    "professional experience",
+    "employment",
+    "education",
+    "skills",
+    "technical skills",
+    "projects",
+    "summary",
+    "objective",
+    "profile",
+    "certifications",
+    "certification",
+    "awards",
+    "publications",
+    "achievements",
+    "activities",
+    "leadership",
+    "interests",
+    "coursework",
+    "relevant coursework",
+    "volunteer",
+    "languages",
+    "tools",
+    "research",
+    "training",
+    "affiliations",
+    "contact",
 }
 
 
@@ -34,38 +58,126 @@ SECTION_WORDS = {
 # Tier 1 -- always an attribute, never an accomplishment. Wins outright, so
 # "Project Management Skills" is excluded despite containing "project".
 HARD_EXCLUDE_HINTS = (
-    "skill", "tool", "technolog", "competenc", "proficien", "expertise",
-    "coursework", "courses", "certificat", "licen", "language", "interest",
-    "hobb", "reference", "publication", "patent", "summary", "objective",
-    "profile", "contact",
+    "skill",
+    "tool",
+    "technolog",
+    "competenc",
+    "proficien",
+    "expertise",
+    "coursework",
+    "courses",
+    "certificat",
+    "licen",
+    "language",
+    "interest",
+    "hobb",
+    "reference",
+    "publication",
+    "patent",
+    "summary",
+    "objective",
+    "profile",
+    "contact",
 )
 
 # Tier 2 -- work you did. Beats the soft excludes, so "Academic Projects" and
 # "Research Experience" produce points.
 DOING_SECTION_HINTS = (
-    "experience", "employment", "work history", "career", "project",
-    "research", "internship", "leadership", "volunteer", "activit",
-    "extracurricular", "involvement", "fellowship", "consulting", "freelance",
-    "teaching", "mentorship",
+    "experience",
+    "employment",
+    "work history",
+    "career",
+    "project",
+    "research",
+    "internship",
+    "leadership",
+    "volunteer",
+    "activit",
+    "extracurricular",
+    "involvement",
+    "fellowship",
+    "consulting",
+    "freelance",
+    "teaching",
+    "mentorship",
 )
 
 # Tier 3 -- credentials and affiliations. Excluded unless a tier-2 word is
 # also present.
 SOFT_EXCLUDE_HINTS = (
-    "education", "academic", "award", "honor", "affiliation", "membership",
-    "training", "about", "achievement", "accolade",
+    "education",
+    "academic",
+    "award",
+    "honor",
+    "affiliation",
+    "membership",
+    "training",
+    "about",
+    "achievement",
+    "accolade",
 )
 
 # Irregular or present-tense verbs the "-ed" test misses.
 ACTION_VERBS = {
-    "built", "led", "wrote", "drove", "grew", "oversaw", "ran", "rebuilt",
-    "set", "took", "won", "began", "chose", "cut", "held", "kept", "made",
-    "met", "sold", "taught", "thought", "brought", "dealt", "found", "sent",
-    "spearhead", "build", "develop", "create", "implement", "manage", "own",
-    "drive", "maintain", "run", "write", "deliver", "ship", "collaborate",
-    "analyze", "automate", "scale", "launch", "improve", "reduce", "optimize",
-    "migrate", "deploy", "coordinate", "mentor", "serve", "serving", "working",
-    "leading", "building", "designing", "developing", "managing", "owning",
+    "built",
+    "led",
+    "wrote",
+    "drove",
+    "grew",
+    "oversaw",
+    "ran",
+    "rebuilt",
+    "set",
+    "took",
+    "won",
+    "began",
+    "chose",
+    "cut",
+    "held",
+    "kept",
+    "made",
+    "met",
+    "sold",
+    "taught",
+    "thought",
+    "brought",
+    "dealt",
+    "found",
+    "sent",
+    "spearhead",
+    "build",
+    "develop",
+    "create",
+    "implement",
+    "manage",
+    "own",
+    "drive",
+    "maintain",
+    "run",
+    "write",
+    "deliver",
+    "ship",
+    "collaborate",
+    "analyze",
+    "automate",
+    "scale",
+    "launch",
+    "improve",
+    "reduce",
+    "optimize",
+    "migrate",
+    "deploy",
+    "coordinate",
+    "mentor",
+    "serve",
+    "serving",
+    "working",
+    "leading",
+    "building",
+    "designing",
+    "developing",
+    "managing",
+    "owning",
 }
 # Deliberately NOT action verbs: "engineer", "architect", "lead", "design",
 # "partner", "support" are job titles as often as verbs, and treating
@@ -74,11 +186,35 @@ ACTION_VERBS = {
 # Words ending in -ed that are adjectives or company names, not past-tense verbs.
 # "United Technologies" must not read as the verb "to unite".
 NON_ACTION_ED = {
-    "united", "advanced", "applied", "allied", "integrated", "distributed",
-    "limited", "unlimited", "dedicated", "certified", "licensed", "registered",
-    "accredited", "based", "related", "detailed", "skilled", "experienced",
-    "motivated", "oriented", "focused", "combined", "mixed", "varied",
-    "associated", "affiliated", "specialized", "qualified", "talented",
+    "united",
+    "advanced",
+    "applied",
+    "allied",
+    "integrated",
+    "distributed",
+    "limited",
+    "unlimited",
+    "dedicated",
+    "certified",
+    "licensed",
+    "registered",
+    "accredited",
+    "based",
+    "related",
+    "detailed",
+    "skilled",
+    "experienced",
+    "motivated",
+    "oriented",
+    "focused",
+    "combined",
+    "mixed",
+    "varied",
+    "associated",
+    "affiliated",
+    "specialized",
+    "qualified",
+    "talented",
 }
 
 
@@ -112,7 +248,9 @@ ORG_SUFFIX = re.compile(
     r"technology|tech|labs|laboratories|solutions|systems|group|holdings|partners|"
     r"associates|consulting|consultancy|university|institute|college|school|academy|"
     r"hospital|health|bank|capital|ventures|studio|studios|agency|foundation|"
-    r"gmbh|plc|pvt|sas|nv|ab|oy)\b\.?", re.I)
+    r"gmbh|plc|pvt|sas|nv|ab|oy)\b\.?",
+    re.I,
+)
 
 SEPARATOR_RE = re.compile(r"\s[|\u2013\u2014\u2022\u00b7\u2011-]\s")
 
@@ -123,7 +261,8 @@ DATE_RANGE_RE = re.compile(
     r"\s*(?:-|\u2013|\u2014|\u2011|to|through|until|\u2192)\s*"
     rf"(?:present|current|now|ongoing|date|(?:{_MONTH}\s*,?\s*)?(?:19|20)\d{{2}})"
     rf"|{_MONTH}\s*(?:19|20)\d{{2}}\s*(?:-|\u2013|\u2014|to)\s*{_MONTH}\s*(?:19|20)\d{{2}}",
-    re.I)
+    re.I,
+)
 
 
 def _title_case_ratio(text: str) -> float:
@@ -225,10 +364,16 @@ def _refit_runs(runs: list[dict[str, Any]], text: str) -> list[dict[str, Any]]:
         if out and owner[-1] is r:
             out[-1]["text"] += " " + w
         else:
-            out.append({"text": w, "bold": bool(r.get("bold")),
-                        "italic": bool(r.get("italic")),
-                        "uri": r.get("uri", ""), "color": r.get("color", ""),
-                        "underline": bool(r.get("underline"))})
+            out.append(
+                {
+                    "text": w,
+                    "bold": bool(r.get("bold")),
+                    "italic": bool(r.get("italic")),
+                    "uri": r.get("uri", ""),
+                    "color": r.get("color", ""),
+                    "underline": bool(r.get("underline")),
+                }
+            )
             owner.append(r)
     return out
 
@@ -282,7 +427,7 @@ def _split_trailing_date(text: str) -> tuple[str, str]:
     stripped = text.strip()
     m = DATE_RANGE_RE.search(stripped)
     if m and m.end() >= len(stripped) - 1 and m.start() > 10:
-        return stripped[: m.start()].strip(" ,;-\u2013\u2014"), stripped[m.start():].strip()
+        return stripped[: m.start()].strip(" ,;-\u2013\u2014"), stripped[m.start() :].strip()
     return text, ""
 
 
@@ -319,8 +464,7 @@ def _finalize_points(blocks: list[dict[str, Any]]) -> None:
                 # still line up so styling and links survive the fix; a block
                 # with a right-aligned half has words the runs never covered, so
                 # there the exporter falls back to the dominant style.
-                b["runs"] = ([] if b.get("right")
-                             else _refit_runs(b.get("runs") or [], text))
+                b["runs"] = [] if b.get("right") else _refit_runs(b.get("runs") or [], text)
         b["text"] = text
 
 
@@ -346,8 +490,7 @@ def parse_resume(path: str) -> dict[str, Any]:
     steps = sorted(
         b.top - a.top
         for a, b in zip(lines, lines[1:], strict=False)
-        if a.page == b.page and abs(a.size - b.size) < 0.6
-        and 0 < (b.top - a.top) <= a.size * 1.8
+        if a.page == b.page and abs(a.size - b.size) < 0.6 and 0 < (b.top - a.top) <= a.size * 1.8
     )
     doc_leading = steps[len(steps) // 2] if steps else body * 1.2
 
@@ -408,11 +551,13 @@ def parse_resume(path: str) -> dict[str, Any]:
                 and not _looks_like_entry(line, body)
             )
             if merge:
-                merges.append({
-                    "into": prev["id"],
-                    "reason": "continuation" if by_continuation else "could-not-fit",
-                    "slack": round(content_right - pl["x1"], 1),
-                })
+                merges.append(
+                    {
+                        "into": prev["id"],
+                        "reason": "continuation" if by_continuation else "could-not-fit",
+                        "slack": round(content_right - pl["x1"], 1),
+                    }
+                )
             elif labelled and aligned and -1.0 <= vgap <= line.size * 1.1:
                 # Worth seeing: geometry said "wrap", the label guard said "no".
                 blocked_labels.append(prev["id"])
@@ -457,8 +602,7 @@ def parse_resume(path: str) -> dict[str, Any]:
 
         # Does a horizontal rule sit just under this line? (section underlines)
         rule_below = any(
-            r.page == line.page and 0 <= r.top - line.bottom <= line.size * 1.2
-            for r in doc.rules
+            r.page == line.page and 0 <= r.top - line.bottom <= line.size * 1.2 for r in doc.rules
         )
 
         blocks.append(
@@ -476,10 +620,16 @@ def parse_resume(path: str) -> dict[str, Any]:
                 "right_runs": [r.to_dict() for r in line.right_runs],
                 "justified": line.stretched,
                 "_line": {
-                    "x0": line.x0, "x1": line.x1, "text_x0": line.text_x0,
-                    "top": line.top, "bottom": line.bottom,
-                    "size": line.size, "bold": line.bold, "italic": line.italic,
-                    "font": line.font, "page": line.page,
+                    "x0": line.x0,
+                    "x1": line.x1,
+                    "text_x0": line.text_x0,
+                    "top": line.top,
+                    "bottom": line.bottom,
+                    "size": line.size,
+                    "bold": line.bold,
+                    "italic": line.italic,
+                    "font": line.font,
+                    "page": line.page,
                 },
             }
         )
@@ -499,14 +649,18 @@ def parse_resume(path: str) -> dict[str, Any]:
                 b["kind"] == "bullet"
                 and len(t) >= 30
                 and not _looks_like_list(t)
-                and not any(h in re.sub(r"[^a-z ]", " ", b.get("section", "").lower())
-                            for h in HARD_EXCLUDE_HINTS + SOFT_EXCLUDE_HINTS)
+                and not any(
+                    h in re.sub(r"[^a-z ]", " ", b.get("section", "").lower())
+                    for h in HARD_EXCLUDE_HINTS + SOFT_EXCLUDE_HINTS
+                )
             )
             if b["mappable"]:
                 b["reason"] = "fallback-shape-only"
-        obs.warn("parse.fallback_net",
-                 recovered=sum(1 for b in blocks if b["mappable"]),
-                 note="section detection found no points; used shape alone")
+        obs.warn(
+            "parse.fallback_net",
+            recovered=sum(1 for b in blocks if b["mappable"]),
+            note="section detection found no points; used shape alone",
+        )
 
     _finalize_points(blocks)
 
@@ -516,6 +670,7 @@ def parse_resume(path: str) -> dict[str, Any]:
 
     g = doc.geometry
     from collections import Counter
+
     reasons = Counter(b.get("reason") or "point" for b in blocks)
     kinds = Counter(b["kind"] for b in blocks)
     diagnostics: dict[str, Any] = {
@@ -533,8 +688,12 @@ def parse_resume(path: str) -> dict[str, Any]:
         "rules": len(doc.rules),
         "truncated": sum(1 for b in blocks if b.get("truncated")),
         "fonts": sorted({ln.font.split("+")[-1] for ln in lines})[:8],
-        "geometry": {"left": round(g.left, 1), "right": round(g.right, 1),
-                     "top": round(g.top, 1), "bottom": round(g.bottom, 1)},
+        "geometry": {
+            "left": round(g.left, 1),
+            "right": round(g.right, 1),
+            "top": round(g.top, 1),
+            "bottom": round(g.bottom, 1),
+        },
         "body_size": body,
         "leading": round(doc_leading, 2),
     }
@@ -548,8 +707,12 @@ def parse_resume(path: str) -> dict[str, Any]:
         "leading": doc_leading,
         "diagnostics": diagnostics,
         "geometry": {
-            "width": g.width, "height": g.height,
-            "left": g.left, "right": g.right, "top": g.top, "bottom": g.bottom,
+            "width": g.width,
+            "height": g.height,
+            "left": g.left,
+            "right": g.right,
+            "top": g.top,
+            "bottom": g.bottom,
         },
         "blocks": blocks,
         "sections": [b["text"] for b in blocks if b["kind"] == "section"],

@@ -10,9 +10,16 @@
 Only the gateway talks to a backend. Whether a call goes to the Anthropic API
 or a local CLI is the backends' problem, never the prompts'.
 """
+
 from .backends import BackendRegistry, default_registry
 from .gateway import BackendUnavailable, ModelGateway
 from .prompts import EDITABLE_PROMPTS, PromptStore
 
-__all__ = ["BackendRegistry", "BackendUnavailable", "EDITABLE_PROMPTS", "ModelGateway",
-           "PromptStore", "default_registry"]
+__all__ = [
+    "BackendRegistry",
+    "BackendUnavailable",
+    "EDITABLE_PROMPTS",
+    "ModelGateway",
+    "PromptStore",
+    "default_registry",
+]

@@ -5,6 +5,7 @@ and wires the Store, the model backends, the gateway and the services
 together. Everything it builds is passed in, never imported, so a test (or a
 second instance) can hand it storage and backends of its own.
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,15 +45,18 @@ async def lifespan(app: FastAPI):
     services.store.init()
     services.settings.apply_saved()
     registry = services.gateway.registry
-    obs.event("app.start", model=registry.model_label(),
-              backend=registry.current_name(),
-              backend_ready=services.gateway.status() is None,
-              data_dir=obs.path_str(services.paths.uploads.parent),
-              log_dir=obs.path_str(services.paths.logs),
-              log_level=LOG_LEVEL,
-              prompts_archived=obs._prompts_enabled(),
-              text_in_logs=obs._log_text_enabled(),
-              resumes=len(services.store.resumes.all()))
+    obs.event(
+        "app.start",
+        model=registry.model_label(),
+        backend=registry.current_name(),
+        backend_ready=services.gateway.status() is None,
+        data_dir=obs.path_str(services.paths.uploads.parent),
+        log_dir=obs.path_str(services.paths.logs),
+        log_level=LOG_LEVEL,
+        prompts_archived=obs._prompts_enabled(),
+        text_in_logs=obs._log_text_enabled(),
+        resumes=len(services.store.resumes.all()),
+    )
     yield
     obs.event("app.stop", **obs.totals())
 
@@ -60,17 +64,22 @@ async def lifespan(app: FastAPI):
 async def _log_requests(request: Request, call_next):
     run = obs.new_run_id()
     if request.url.path.startswith(("/styles.css", "/app.js")) or request.url.path == "/":
-        return await call_next(request)   # static assets are not worth an event
+        return await call_next(request)  # static assets are not worth an event
     with obs.timer() as t:
         try:
             response = await call_next(request)
         except Exception as exc:  # noqa: BLE001
-            obs.error("http.error", exc=exc, method=request.method,
-                      path=request.url.path)
+            obs.error("http.error", exc=exc, method=request.method, path=request.url.path)
             raise
     level = logging.WARNING if response.status_code >= 400 else logging.INFO
-    obs.event("http.request", level=level, method=request.method,
-              path=request.url.path, status=response.status_code, ms=t.ms)
+    obs.event(
+        "http.request",
+        level=level,
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+        ms=t.ms,
+    )
     if t.ms > 15000:
         obs.warn("http.slow", path=request.url.path, ms=t.ms)
     response.headers["X-Resumap-Run"] = run
@@ -98,16 +107,31 @@ def create_app(paths: Paths | None = None, registry: BackendRegistry | None = No
     otherwise)."""
     paths = paths or Paths.from_env()
     registry = registry or default_registry(
-        selected=BACKEND, model=MODEL, api_key=api_key, claude_cli=CLAUDE_CLI,
-        codex_cli=CODEX_CLI, pi_cli=PI_CLI, dotenv_keys=DOTENV_KEYS, cwd=BASE_DIR)
+        selected=BACKEND,
+        model=MODEL,
+        api_key=api_key,
+        claude_cli=CLAUDE_CLI,
+        codex_cli=CODEX_CLI,
+        pi_cli=PI_CLI,
+        dotenv_keys=DOTENV_KEYS,
+        cwd=BASE_DIR,
+    )
     gateway = ModelGateway(registry, PromptStore(), paths.logs)
-    services = Services.build(Store(Database(paths.db)), gateway, paths,
-                              default_backend=BACKEND, default_first_name=DEFAULT_FIRST_NAME)
+    services = Services.build(
+        Store(Database(paths.db)),
+        gateway,
+        paths,
+        default_backend=BACKEND,
+        default_first_name=DEFAULT_FIRST_NAME,
+    )
 
     # Declaring 422 here replaces FastAPI's default validation-error schema,
     # which this app does not send (see api/errors.py).
-    app = FastAPI(title="Resumap", lifespan=lifespan,
-                  responses={422: {"model": ErrorOut, "description": "Invalid request"}})
+    app = FastAPI(
+        title="Resumap",
+        lifespan=lifespan,
+        responses={422: {"model": ErrorOut, "description": "Invalid request"}},
+    )
     app.state.services = services
     app.middleware("http")(_log_requests)
     errors.install(app)

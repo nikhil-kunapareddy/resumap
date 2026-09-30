@@ -1,4 +1,5 @@
 """Transform and review: the rewrites of a job's mapped boxes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -23,10 +24,10 @@ def prompt_preview(job_id: int, block_id: str, services: ServicesDep) -> PromptP
 
 
 @router.patch("/rewrites/{block_id}")
-def patch_rewrite(job_id: int, block_id: str, body: RewritePatch,
-                  services: ServicesDep) -> Rewrite:
-    return services.rewrites.edit(job_id, block_id, text=body.text, status=body.status,
-                                  placement=body.placement)
+def patch_rewrite(job_id: int, block_id: str, body: RewritePatch, services: ServicesDep) -> Rewrite:
+    return services.rewrites.edit(
+        job_id, block_id, text=body.text, status=body.status, placement=body.placement
+    )
 
 
 @router.post("/accept-all")

@@ -3,6 +3,7 @@
 Each ``*_request`` builds the exact (system, user) pair, for the call and for
 the Map step's preview alike, so the preview cannot drift from what is sent.
 """
+
 from __future__ import annotations
 
 from ..domain import ExperienceKind
@@ -12,8 +13,10 @@ from .prompts import PromptStore, with_note
 # Bullet rewriting
 # --------------------------------------------------------------------------
 
-def _prompt(bullet: str, section: str, jd_points: list[dict], role: str, company: str,
-            max_chars: int = 0) -> str:
+
+def _prompt(
+    bullet: str, section: str, jd_points: list[dict], role: str, company: str, max_chars: int = 0
+) -> str:
     lines = [
         f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
         f"<resume_section>{section or 'unspecified'}</resume_section>",
@@ -34,15 +37,21 @@ def _prompt(bullet: str, section: str, jd_points: list[dict], role: str, company
     return "\n".join(lines)
 
 
-
-def rewrite_request(prompts: PromptStore, bullet: str, section: str, jd_points: list[dict], role: str,
-                    company: str, mode: str = "aggressive", extra: str = "",
-                    max_chars: int = 0) -> tuple[str, str]:
+def rewrite_request(
+    prompts: PromptStore,
+    bullet: str,
+    section: str,
+    jd_points: list[dict],
+    role: str,
+    company: str,
+    mode: str = "aggressive",
+    extra: str = "",
+    max_chars: int = 0,
+) -> tuple[str, str]:
     """(system, user) for one bullet rewrite -- exactly what rewrite_bullet sends,
     and what the Map step's prompt preview shows."""
     system = with_note(prompts.text("rewrite") + "\n\n" + prompts.mode_rules(mode), extra)
     return system, _prompt(bullet, section, jd_points, role, company, max_chars)
-
 
 
 # --------------------------------------------------------------------------
@@ -56,9 +65,17 @@ def rewrite_request(prompts: PromptStore, bullet: str, section: str, jd_points: 
 # claims is new, and `substitutions` is where that has to show.
 # --------------------------------------------------------------------------
 
-def _replace_prompt(bullet: str, section: str, entry: str, siblings: list[str],
-                    jd_points: list[dict], role: str, company: str,
-                    max_chars: int = 0) -> str:
+
+def _replace_prompt(
+    bullet: str,
+    section: str,
+    entry: str,
+    siblings: list[str],
+    jd_points: list[dict],
+    role: str,
+    company: str,
+    max_chars: int = 0,
+) -> str:
     lines = [
         f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
         f"<resume_section>{section or 'unspecified'}</resume_section>",
@@ -83,16 +100,24 @@ def _replace_prompt(bullet: str, section: str, entry: str, siblings: list[str],
     return "\n".join(lines)
 
 
-
-def replace_request(prompts: PromptStore, bullet: str, section: str, entry: str, siblings: list[str],
-                    jd_points: list[dict], role: str, company: str, extra: str = "",
-                    max_chars: int = 0) -> tuple[str, str]:
+def replace_request(
+    prompts: PromptStore,
+    bullet: str,
+    section: str,
+    entry: str,
+    siblings: list[str],
+    jd_points: list[dict],
+    role: str,
+    company: str,
+    extra: str = "",
+    max_chars: int = 0,
+) -> tuple[str, str]:
     """(system, user) for one replaced bullet, as sent and as previewed.
     No mode rules: every mode keeps the original's accomplishment."""
     system = with_note(prompts.text("replace"), extra)
-    return system, _replace_prompt(bullet, section, entry, siblings, jd_points,
-                                   role, company, max_chars)
-
+    return system, _replace_prompt(
+        bullet, section, entry, siblings, jd_points, role, company, max_chars
+    )
 
 
 # --------------------------------------------------------------------------
@@ -115,13 +140,19 @@ EXPERIENCE_KINDS = {
 DEFAULT_SECTION = {ExperienceKind.PROJECT: "PROJECTS"}
 
 
-def _experience_prompt(experience: dict, jd_points: list[dict], role: str,
-                       company: str, placements: list[dict], examples: list[str],
-                       max_chars: int) -> str:
+def _experience_prompt(
+    experience: dict,
+    jd_points: list[dict],
+    role: str,
+    company: str,
+    placements: list[dict],
+    examples: list[str],
+    max_chars: int,
+) -> str:
     kind = EXPERIENCE_KINDS.get(experience.get("kind", ""), "Other")
     lines = [
         f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
-        f"<experience kind=\"{kind}\">",
+        f'<experience kind="{kind}">',
     ]
     if experience.get("title"):
         lines.append(f"Title: {experience['title']}")
@@ -135,7 +166,7 @@ def _experience_prompt(experience: dict, jd_points: list[dict], role: str,
     lines.append("<placements>")
     for p in placements:
         where = f" in {p['section']}" if p.get("section") else ""
-        lines.append(f"{p['id']}: {p['kind']} \"{p['text']}\"{where}")
+        lines.append(f'{p["id"]}: {p["kind"]} "{p["text"]}"{where}')
     lines += ["new: a section of its own", "</placements>", "<mapped_jd_points>"]
     for p in jd_points:
         kw = ", ".join(p.get("keywords") or []) or "none extracted"
@@ -144,13 +175,20 @@ def _experience_prompt(experience: dict, jd_points: list[dict], role: str,
     return "\n".join(lines)
 
 
-
-def experience_request(prompts: PromptStore, experience: dict, jd_points: list[dict], role: str,
-                       company: str, placements: list[dict], examples: list[str],
-                       mode: str = "aggressive", extra: str = "",
-                       max_chars: int = 0) -> tuple[str, str]:
+def experience_request(
+    prompts: PromptStore,
+    experience: dict,
+    jd_points: list[dict],
+    role: str,
+    company: str,
+    placements: list[dict],
+    examples: list[str],
+    mode: str = "aggressive",
+    extra: str = "",
+    max_chars: int = 0,
+) -> tuple[str, str]:
     """(system, user) for one new bullet from an experience, as sent."""
     system = with_note(prompts.text("experience") + "\n\n" + prompts.mode_rules(mode), extra)
-    return system, _experience_prompt(experience, jd_points, role, company,
-                                      placements, examples, max_chars)
-
+    return system, _experience_prompt(
+        experience, jd_points, role, company, placements, examples, max_chars
+    )

@@ -10,6 +10,7 @@ A resume is always emitted as a single page. If the faithful layout overflows,
 leading and inter-block spacing are tightened -- and only then the font scaled --
 until it fits.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -25,8 +26,18 @@ from reportlab.pdfgen import canvas
 from .. import obs
 from ..parsing.resume import HARD_EXCLUDE_HINTS
 
-SERIF_HINTS = ("times", "serif", "roman", "georgia", "garamond", "cambria",
-               "minion", "book", "palatino", "century")
+SERIF_HINTS = (
+    "times",
+    "serif",
+    "roman",
+    "georgia",
+    "garamond",
+    "cambria",
+    "minion",
+    "book",
+    "palatino",
+    "century",
+)
 MONO_HINTS = ("courier", "mono", "consolas")
 
 SAFE_BULLET = "\u2022"
@@ -34,6 +45,7 @@ SAFE_BULLET = "\u2022"
 
 class Word(NamedTuple):
     """One word plus everything needed to draw it: style, link, colour."""
+
     text: str
     font: str
     uri: str = ""
@@ -46,8 +58,7 @@ class Word(NamedTuple):
 # click. Without a scheme or a "www.", both an alphabetic last label and a path
 # are required, which is what keeps ordinary dotted words ("socket.io",
 # "Node.js") and a GPA ("3.9/4.0") from being turned into links.
-AUTOLINK_RE = re.compile(
-    r"^(?:https?://|www\.)\S+$|^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/\S+$", re.I)
+AUTOLINK_RE = re.compile(r"^(?:https?://|www\.)\S+$|^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/\S+$", re.I)
 # A typed-out email is a link too; the source's own mail client would open it.
 EMAIL_RE = re.compile(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}$", re.I)
 # Trailing sentence punctuation is part of the prose, not of the URL.
@@ -71,9 +82,10 @@ def _rgb(color: str) -> tuple[float, float, float] | None:
     if not color or not color.startswith("#") or len(color) != 7:
         return None
     try:
-        return tuple(int(color[i:i + 2], 16) / 255.0 for i in (1, 3, 5))  # type: ignore[return-value]
+        return tuple(int(color[i : i + 2], 16) / 255.0 for i in (1, 3, 5))  # type: ignore[return-value]
     except ValueError:
         return None
+
 
 # A round bullet is not in the base-14 Type1 fonts: ReportLab silently
 # substitutes ZapfDingbats, which extracts as a stray "l" at the head of every
@@ -88,9 +100,10 @@ def _bullet_font() -> str:
     if _BULLET_FONT is None:
         try:
             from reportlab.pdfbase.ttfonts import TTFont
+
             pdfmetrics.registerFont(TTFont("ResumapBullet", "Vera.ttf"))
             _BULLET_FONT = "ResumapBullet"
-        except Exception:      # noqa: BLE001 - fall back to a WinAnsi glyph
+        except Exception:  # noqa: BLE001 - fall back to a WinAnsi glyph
             _BULLET_FONT = None
     return _BULLET_FONT or "Times-Roman"
 
@@ -180,10 +193,21 @@ def export_filename(first_name: str, company: str, when: date | None = None) -> 
 # claude.revise_pdf). Font, leading and spacing multiply the source's own
 # values; margins replace them, in points; justify overrides the alignment
 # read from the source. The fit ladder still applies on top of all of it.
-LAYOUT_DEFAULTS = {"font": 1.0, "leading": 1.0, "spacing": 1.0,
-                   "margin_x": None, "margin_y": None, "justify": "original"}
-LAYOUT_LIMITS = {"font": (0.7, 1.3), "leading": (0.7, 1.6), "spacing": (0.0, 2.5),
-                 "margin_x": (18.0, 108.0), "margin_y": (18.0, 108.0)}
+LAYOUT_DEFAULTS = {
+    "font": 1.0,
+    "leading": 1.0,
+    "spacing": 1.0,
+    "margin_x": None,
+    "margin_y": None,
+    "justify": "original",
+}
+LAYOUT_LIMITS = {
+    "font": (0.7, 1.3),
+    "leading": (0.7, 1.6),
+    "spacing": (0.0, 2.5),
+    "margin_x": (18.0, 108.0),
+    "margin_y": (18.0, 108.0),
+}
 
 
 def clean_layout(layout: dict | None) -> dict:
@@ -220,9 +244,14 @@ def gap_extra(prev: dict, cur: dict, doc_leading: float, body: float) -> float:
 
 
 class ResumeRenderer:
-    def __init__(self, doc: dict, leading_scale: float = 1.0,
-                 space_scale: float = 1.0, font_scale: float = 1.0,
-                 layout: dict | None = None):
+    def __init__(
+        self,
+        doc: dict,
+        leading_scale: float = 1.0,
+        space_scale: float = 1.0,
+        font_scale: float = 1.0,
+        layout: dict | None = None,
+    ):
         lay = clean_layout(layout)
         g = doc.get("geometry") or {}
         self.width = float(g.get("width") or 612.0)
@@ -241,12 +270,15 @@ class ResumeRenderer:
         self.right_edge = self.width - self.mr
         # Where the source's text column ended: a wrapped line that reached it
         # was justified, whatever the per-line stretch detector concluded.
-        self.src_right = max((float((b.get("_line") or {}).get("x1", 0))
-                              for b in self.blocks), default=self.right_edge)
+        self.src_right = max(
+            (float((b.get("_line") or {}).get("x1", 0)) for b in self.blocks),
+            default=self.right_edge,
+        )
         # Documents parsed before underlines were recorded carry no flag at
         # all; for those, a coloured link is the best evidence of one.
         self.legacy_underline = not any(
-            "underline" in r for b in self.blocks for r in (b.get("runs") or []))
+            "underline" in r for b in self.blocks for r in (b.get("runs") or [])
+        )
         self.leading_scale = leading_scale * lay["leading"]
         self.space_scale = space_scale * lay["spacing"]
         self.font_scale = font_scale * lay["font"]
@@ -323,8 +355,7 @@ class ResumeRenderer:
 
     # -- styled text --------------------------------------------------------
 
-    def _styled_words(self, blk: dict, size: float, which: str = "runs"
-                      ) -> list[Word]:
+    def _styled_words(self, blk: dict, size: float, which: str = "runs") -> list[Word]:
         """Flatten a block's runs into drawable words.
 
         Merged multi-line blocks carry no runs -- their styling is uniform, so
@@ -338,15 +369,19 @@ class ResumeRenderer:
         base = ln.get("font", "")
         runs = blk.get(which) or []
         if which == "runs" and not runs:
-            runs = [{"text": blk.get("left") or blk.get("text", ""),
-                     "bold": bool(ln.get("bold")), "italic": bool(ln.get("italic"))}]
+            runs = [
+                {
+                    "text": blk.get("left") or blk.get("text", ""),
+                    "bold": bool(ln.get("bold")),
+                    "italic": bool(ln.get("italic")),
+                }
+            ]
         out: list[Word] = []
         for r in runs:
             f = _font(base, bool(r.get("bold")), bool(r.get("italic")))
             uri = str(r.get("uri") or "")
             color = str(r.get("color") or "")
-            under = bool(r.get("underline")) or (
-                self.legacy_underline and bool(uri and color))
+            under = bool(r.get("underline")) or (self.legacy_underline and bool(uri and color))
             for w in str(r.get("text", "")).split():
                 out.append(Word(w, f, uri or _autolink(w), color, under))
         return out
@@ -385,8 +420,7 @@ class ResumeRenderer:
         """
         words = text.split()
         out = [Word(w, font, _autolink(w)) for w in words]
-        sm = difflib.SequenceMatcher(a=[w.text for w in source], b=words,
-                                     autojunk=False)
+        sm = difflib.SequenceMatcher(a=[w.text for w in source], b=words, autojunk=False)
         for a0, b0, n in sm.get_matching_blocks():
             for k in range(n):
                 src = source[a0 + k]
@@ -402,8 +436,7 @@ class ResumeRenderer:
         total += sum(pdfmetrics.stringWidth(" ", w.font, size) for w in words[:-1])
         return total
 
-    def _wrap_words(self, words: list[Word], size: float, width: float
-                    ) -> list[list[Word]]:
+    def _wrap_words(self, words: list[Word], size: float, width: float) -> list[list[Word]]:
         if width <= 0 or not words:
             return [words] if words else [[]]
         lines: list[list[Word]] = []
@@ -425,8 +458,7 @@ class ResumeRenderer:
         return lines
 
     @staticmethod
-    def _link_spans(c, x: float, y: float, words: list[Word], size: float,
-                    extra: float) -> None:
+    def _link_spans(c, x: float, y: float, words: list[Word], size: float, extra: float) -> None:
         """Lay a clickable rectangle over each linked span of a drawn line,
         and rule under each underlined one.
 
@@ -458,8 +490,7 @@ class ResumeRenderer:
                 prev_rule = i
             cur = end + pdfmetrics.stringWidth(" ", w.font, size) + extra
         for x0, x1, uri in spans:
-            c.linkURL(uri, (x0, y - size * 0.24, x1, y + size * 0.86),
-                      relative=0)
+            c.linkURL(uri, (x0, y - size * 0.24, x1, y + size * 0.86), relative=0)
         for x0, x1, color in rules:
             # Where Word puts it: about an eighth of the size under the baseline.
             c.setStrokeColorRGB(*(_rgb(color) or (0.0, 0.0, 0.0)))
@@ -468,8 +499,9 @@ class ResumeRenderer:
         if rules:
             c.setStrokeColorRGB(0.0, 0.0, 0.0)
 
-    def _draw_words(self, c, x: float, y: float, words: list[Word],
-                    size: float, avail: float, justify: bool) -> None:
+    def _draw_words(
+        self, c, x: float, y: float, words: list[Word], size: float, avail: float, justify: bool
+    ) -> None:
         """Draw one line, keeping real space characters in the text layer.
 
         Placing each word at a computed x would justify just as well, but the
@@ -512,7 +544,7 @@ class ResumeRenderer:
                 i += 1
             segment = " ".join(chunk)
             if i < len(words):
-                segment += " "   # the space before a differently-styled run
+                segment += " "  # the space before a differently-styled run
             t.setFont(font, size)
             # Always set the colour, never just on the coloured segment: fill
             # colour is graphics state, so leaving it unset would bleed a link's
@@ -558,8 +590,7 @@ class ResumeRenderer:
             # recognised from the words themselves.
             override = overrides.get(blk["id"])
             if override is not None:
-                ofont = _font(ln.get("font", ""), bool(ln.get("bold")),
-                              bool(ln.get("italic")))
+                ofont = _font(ln.get("font", ""), bool(ln.get("bold")), bool(ln.get("italic")))
                 words = self._restyle(override, words, ofont)
 
             if right_words:
@@ -584,9 +615,9 @@ class ResumeRenderer:
             self.stats[blk["id"]] = {
                 "lines": len(lines),
                 "source_lines": 0 if blk.get("inserted") else self._source_lines(blk),
-                "chars_per_line": round(avail * text_len
-                                        / max(self._words_width(words, size), 1.0))
-                if words else 0,
+                "chars_per_line": round(avail * text_len / max(self._words_width(words, size), 1.0))
+                if words
+                else 0,
             }
 
             for i, line_words in enumerate(lines):
@@ -606,20 +637,20 @@ class ResumeRenderer:
                         c.setFont(_bullet_font(), size)
                         c.drawString(x, y, SAFE_BULLET)
                     # The last line of a justified paragraph stays ragged.
-                    self._draw_words(c, x + hang, y, line_words, size, avail,
-                                     justify and i < len(lines) - 1)
+                    self._draw_words(
+                        c, x + hang, y, line_words, size, avail, justify and i < len(lines) - 1
+                    )
                 elif self._align(blk) == "center" and not right_words:
                     w = self._words_width(line_words, size)
-                    self._draw_words(c, (self.width - w) / 2, y, line_words,
-                                     size, w, False)
+                    self._draw_words(c, (self.width - w) / 2, y, line_words, size, w, False)
                 else:
-                    self._draw_words(c, x, y, line_words, size, avail,
-                                     justify and i < len(lines) - 1)
+                    self._draw_words(
+                        c, x, y, line_words, size, avail, justify and i < len(lines) - 1
+                    )
 
                 if i == 0 and right_words:
                     rw = self._words_width(right_words, size)
-                    self._draw_words(c, self.right_edge - rw, y, right_words,
-                                     size, rw, False)
+                    self._draw_words(c, self.right_edge - rw, y, right_words, size, rw, False)
 
             if blk.get("rule_below"):
                 self.content_height += size * RULE_SPACE
@@ -635,8 +666,13 @@ class ResumeRenderer:
         return self.pages
 
 
-def render_resume(doc: dict, out_path: str, overrides: dict[str, str] | None = None,
-                  single_page: bool = True, layout: dict | None = None) -> dict:
+def render_resume(
+    doc: dict,
+    out_path: str,
+    overrides: dict[str, str] | None = None,
+    single_page: bool = True,
+    layout: dict | None = None,
+) -> dict:
     """Render to `out_path`, compressing as needed to land on one page.
 
     Returns the chosen scales so callers can tell the user when a resume had to
@@ -651,8 +687,7 @@ def render_resume(doc: dict, out_path: str, overrides: dict[str, str] | None = N
     probes: list[dict] = []
     for i, step in enumerate(FIT_LADDER):
         pages = pages_at(step)
-        probes.append({"lead": step[0], "space": step[1], "font": step[2],
-                       "pages": pages})
+        probes.append({"lead": step[0], "space": step[1], "font": step[2], "pages": pages})
         if pages == 1 or not single_page:
             chosen = step
             if i and single_page:
@@ -670,8 +705,12 @@ def render_resume(doc: dict, out_path: str, overrides: dict[str, str] | None = N
         usable = probe.height - probe.mt - probe.mb
         needed = max(probe.content_height, 1.0)
         scale = min(1.0, usable / needed)
-        obs.warn("render.ladder_exhausted", usable_pt=round(usable, 1),
-                 needed_pt=round(needed, 1), solved_font_scale=round(scale, 3))
+        obs.warn(
+            "render.ladder_exhausted",
+            usable_pt=round(usable, 1),
+            needed_pt=round(needed, 1),
+            solved_font_scale=round(scale, 3),
+        )
         iterations = 0
         while scale >= MIN_FONT_SCALE:
             iterations += 1
@@ -682,26 +721,35 @@ def render_resume(doc: dict, out_path: str, overrides: dict[str, str] | None = N
             scale -= 0.02
         if chosen is None:
             chosen = (tight[0], tight[1], MIN_FONT_SCALE)
-            obs.warn("render.cannot_fit_one_page",
-                     floor=MIN_FONT_SCALE, iterations=iterations,
-                     note="content exceeds one readable page; trim it")
+            obs.warn(
+                "render.cannot_fit_one_page",
+                floor=MIN_FONT_SCALE,
+                iterations=iterations,
+                note="content exceeds one readable page; trim it",
+            )
         else:
-            obs.event("render.analytic_fit", font_scale=chosen[2],
-                      iterations=iterations)
+            obs.event("render.analytic_fit", font_scale=chosen[2], iterations=iterations)
 
     renderer = ResumeRenderer(doc, *chosen, layout=layout)
     with obs.timer() as t:
         pages = renderer.render(out_path, overrides)
     changed = sorted(k for k, v in layout.items() if v != LAYOUT_DEFAULTS[k])
-    obs.event("render.done", pages=pages, leading_scale=chosen[0],
-              space_scale=chosen[1], font_scale=chosen[2],
-              compressed=chosen != FIT_LADDER[0], cramped=chosen[2] < 0.85,
-              blocks=len(doc.get("blocks") or []),
-              overrides=len(overrides or {}), probes=len(probes),
-              layout=changed or None,
-              content_pt=round(renderer.content_height, 1), ms=t.ms,
-              ladder=[f"{x['lead']}/{x['space']}/{x['font']}:{x['pages']}p"
-                      for x in probes[-4:]])
+    obs.event(
+        "render.done",
+        pages=pages,
+        leading_scale=chosen[0],
+        space_scale=chosen[1],
+        font_scale=chosen[2],
+        compressed=chosen != FIT_LADDER[0],
+        cramped=chosen[2] < 0.85,
+        blocks=len(doc.get("blocks") or []),
+        overrides=len(overrides or {}),
+        probes=len(probes),
+        layout=changed or None,
+        content_pt=round(renderer.content_height, 1),
+        ms=t.ms,
+        ladder=[f"{x['lead']}/{x['space']}/{x['font']}:{x['pages']}p" for x in probes[-4:]],
+    )
     return {
         "path": out_path,
         "pages": pages,
@@ -753,21 +801,25 @@ def line_budget(doc: dict, layout: dict | None = None) -> dict[str, int]:
     Measured with the renderer's own metrics at full size, so a rewrite held to
     this lands on the same number of lines the original occupied.
     """
-    return {bid: max(0, st["source_lines"] * (st["chars_per_line"] - WRAP_WASTE))
-            for bid, st in _line_stats(doc, layout).items()}
+    return {
+        bid: max(0, st["source_lines"] * (st["chars_per_line"] - WRAP_WASTE))
+        for bid, st in _line_stats(doc, layout).items()
+    }
 
 
 def new_bullet_budget(doc: dict, layout: dict | None = None, lines: int = 2) -> int:
     """Characters a brand-new bullet may use to stay within `lines` lines."""
     bullets = {b["id"] for b in doc.get("blocks") or [] if b["kind"] == "bullet"}
-    cpl = sorted(st["chars_per_line"] for bid, st in _line_stats(doc, layout).items()
-                 if bid in bullets)
+    cpl = sorted(
+        st["chars_per_line"] for bid, st in _line_stats(doc, layout).items() if bid in bullets
+    )
     return lines * (cpl[len(cpl) // 2] - WRAP_WASTE) if cpl else 0
 
 
 # ---------------------------------------------------------------------------
 # New bullets from the experience library
 # ---------------------------------------------------------------------------
+
 
 def _attribute_section(name: str) -> bool:
     """Skills, tools, certifications: a list of attributes, conventionally last."""
@@ -804,24 +856,33 @@ def insert_blocks(doc: dict, inserts: list[dict]) -> dict:
             j += 1
         return j
 
-    def bullet(ins: dict, template: dict | None, anchor: dict | None,
-               section: str, extra: float) -> dict:
+    def bullet(
+        ins: dict, template: dict | None, anchor: dict | None, section: str, extra: float
+    ) -> dict:
         if template:
             line = dict(template["_line"])
         else:
             # A resume with no bullets at all: indent under whatever it follows.
             base = dict((anchor or blocks[-1])["_line"])
             x0 = float(base.get("x0", 54.0)) + body
-            line = {**base, "x0": x0, "text_x0": x0 + body * 1.3,
-                    "bold": False, "italic": False}
+            line = {**base, "x0": x0, "text_x0": x0 + body * 1.3, "bold": False, "italic": False}
         return {
-            "id": ins["id"], "kind": "bullet", "section": section,
-            "text": ins["text"], "left": "", "right": "",
+            "id": ins["id"],
+            "kind": "bullet",
+            "section": section,
+            "text": ins["text"],
+            "left": "",
+            "right": "",
             "bullet_char": (template or {}).get("bullet_char") or SAFE_BULLET,
-            "rule_below": False, "mappable": True, "reason": None,
-            "runs": [], "right_runs": [],
+            "rule_below": False,
+            "mappable": True,
+            "reason": None,
+            "runs": [],
+            "right_runs": [],
             "justified": bool((template or {}).get("justified")),
-            "inserted": True, "_extra": extra, "_line": line,
+            "inserted": True,
+            "_extra": extra,
+            "_line": line,
         }
 
     before: dict[int, list[dict]] = {}
@@ -835,37 +896,62 @@ def insert_blocks(doc: dict, inserts: list[dict]) -> dict:
             continue
         anchor = blocks[i]
         pos = end_of(i, ("entry", "section") if anchor["kind"] == "entry" else ("section",))
-        template = next((b for b in blocks[i + 1:pos] if b["kind"] == "bullet"), first_bullet)
+        template = next((b for b in blocks[i + 1 : pos] if b["kind"] == "bullet"), first_bullet)
         section = anchor["text"] if anchor["kind"] == "section" else anchor.get("section", "")
         before.setdefault(pos, []).append(bullet(ins, template, blocks[pos - 1], section, 0.0))
 
     if groups:
-        tail = sections[-1] if len(sections) > 1 and _attribute_section(
-            blocks[sections[-1]]["text"]) else n
+        tail = (
+            sections[-1]
+            if len(sections) > 1 and _attribute_section(blocks[sections[-1]]["text"])
+            else n
+        )
         model = blocks[sections[-1]] if sections else None
         # A new heading copies the spacing the source gives the section it now
         # precedes (or its last section); its first bullet copies the gap that
         # section leaves under its own heading.
         ref = tail if tail < n else (sections[-1] if sections else None)
         head_extra = gap_extra(blocks[ref - 1], blocks[ref], lead, body) if ref else body
-        under_extra = (gap_extra(blocks[ref], blocks[ref + 1], lead, body)
-                       if ref is not None and ref + 1 < n else 0.0)
+        under_extra = (
+            gap_extra(blocks[ref], blocks[ref + 1], lead, body)
+            if ref is not None and ref + 1 < n
+            else 0.0
+        )
         caps = model is not None and model["text"].upper() == model["text"]
         for k, (heading, group) in enumerate(groups.items(), start=1):
-            head_line = dict(model["_line"]) if model else {
-                **dict(blocks[-1]["_line"]), "bold": True, "x0": float(
-                    (doc.get("geometry") or {}).get("left") or 54.0)}
-            before.setdefault(tail, []).append({
-                "id": f"new{k:03d}", "kind": "section", "section": "",
-                "text": heading.upper() if caps else heading, "left": "", "right": "",
-                "bullet_char": "", "rule_below": bool(model and model.get("rule_below")),
-                "mappable": False, "reason": "inserted", "runs": [], "right_runs": [],
-                "justified": False, "inserted": True, "_extra": head_extra,
-                "_line": head_line,
-            })
+            head_line = (
+                dict(model["_line"])
+                if model
+                else {
+                    **dict(blocks[-1]["_line"]),
+                    "bold": True,
+                    "x0": float((doc.get("geometry") or {}).get("left") or 54.0),
+                }
+            )
+            before.setdefault(tail, []).append(
+                {
+                    "id": f"new{k:03d}",
+                    "kind": "section",
+                    "section": "",
+                    "text": heading.upper() if caps else heading,
+                    "left": "",
+                    "right": "",
+                    "bullet_char": "",
+                    "rule_below": bool(model and model.get("rule_below")),
+                    "mappable": False,
+                    "reason": "inserted",
+                    "runs": [],
+                    "right_runs": [],
+                    "justified": False,
+                    "inserted": True,
+                    "_extra": head_extra,
+                    "_line": head_line,
+                }
+            )
             for j, ins in enumerate(group):
-                before[tail].append(bullet(ins, first_bullet, None, heading,
-                                           under_extra if j == 0 else 0.0))
+                before[tail].append(
+                    bullet(ins, first_bullet, None, heading, under_extra if j == 0 else 0.0)
+                )
 
     out: list[dict] = []
     for i in range(n + 1):

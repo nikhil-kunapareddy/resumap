@@ -23,6 +23,7 @@ Pi exits 0 even when the provider call fails. The failure is on the final
 assistant message -- ``stopReason: "error"`` with an ``errorMessage`` -- so
 that is what is checked.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,8 +40,7 @@ from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
 TIMEOUT_S = 300
 
 # Resumap's effort levels onto pi's --thinking levels.
-THINKING = {"low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh",
-            "max": "xhigh"}
+THINKING = {"low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh"}
 
 JSON_RULES = """
 
@@ -97,12 +97,13 @@ def _json_text(text: str) -> str:
     """The JSON object in a reply that may have wrapped it in a fence or prose."""
     t = _FENCE.sub("", text.strip())
     start, end = t.find("{"), t.rfind("}")
-    return t[start:end + 1] if start >= 0 and end > start else t
+    return t[start : end + 1] if start >= 0 and end > start else t
 
 
 def _text(message: dict) -> str:
-    return "".join(b.get("text", "") for b in message.get("content") or []
-                   if b.get("type") == "text")
+    return "".join(
+        b.get("text", "") for b in message.get("content") or [] if b.get("type") == "text"
+    )
 
 
 class PiBackend(Backend):
@@ -124,44 +125,69 @@ class PiBackend(Backend):
 
     def unavailable(self) -> str | None:
         if self._cli_path() is None:
-            return ("Could not find the `pi` command. Install the pi coding agent, "
-                    "or point RESUMAP_PI_CLI at the binary.")
+            return (
+                "Could not find the `pi` command. Install the pi coding agent, "
+                "or point RESUMAP_PI_CLI at the binary."
+            )
         # Whether pi's provider is signed in only shows on a real call; a failure
         # there comes back with the provider's own message.
         return None
 
-    async def _ask(self, cli: str, system: str, prompt: str, model: str,
-                   thinking: str) -> tuple[dict, str | None]:
-        cmd = [cli, "-p", "--mode", "json", "--no-tools", "--no-session",
-               "--no-context-files", "--no-skills", "--no-prompt-templates",
-               "--thinking", thinking, "--system-prompt", system]
+    async def _ask(
+        self, cli: str, system: str, prompt: str, model: str, thinking: str
+    ) -> tuple[dict, str | None]:
+        cmd = [
+            cli,
+            "-p",
+            "--mode",
+            "json",
+            "--no-tools",
+            "--no-session",
+            "--no-context-files",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--thinking",
+            thinking,
+            "--system-prompt",
+            system,
+        ]
         if model:
             cmd += ["--model", model]
         # A message starting with "@" is read as a file to attach; ours start with
         # a tag, but a leading newline makes that impossible regardless.
         cmd.append("\n" + prompt)
         with tempfile.TemporaryDirectory(prefix="resumap-pi-") as tmp:
-            code, stdout, stderr = await run_cli(cmd, None, cwd=tmp, env=cli_env(self._dotenv_keys),
-                                                 timeout=TIMEOUT_S)
+            code, stdout, stderr = await run_cli(
+                cmd, None, cwd=tmp, env=cli_env(self._dotenv_keys), timeout=TIMEOUT_S
+            )
         message, session = _final_message(stdout)
         if not message:
             tail = (stderr.strip().splitlines() or ["no output"])[-1]
             raise RuntimeError(f"Pi returned no answer (exit {code}): {tail}")
         if message.get("stopReason") == "error":
             where = "/".join(x for x in (message.get("provider"), message.get("model")) if x)
-            raise RuntimeError(f"Pi ({where or 'default model'}): "
-                               f"{_error_text(message.get('errorMessage', ''))}")
+            raise RuntimeError(
+                f"Pi ({where or 'default model'}): {_error_text(message.get('errorMessage', ''))}"
+            )
         return message, session
 
-    async def complete(self, *, model: str, system: str, user: str,
-                       schema: type[BaseModel], max_tokens: int,
-                       effort: Effort) -> Completion:
+    async def complete(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+        max_tokens: int,
+        effort: Effort,
+    ) -> Completion:
         cli = self._cli_path()
         if cli is None:
             raise RuntimeError(self.unavailable() or "pi not found")
         thinking = THINKING.get(effort, "medium")
         full_system = system + JSON_RULES.format(
-            schema=json.dumps(schema.model_json_schema(), separators=(",", ":")))
+            schema=json.dumps(schema.model_json_schema(), separators=(",", ":"))
+        )
 
         totals: dict[str, float] = {"input": 0, "output": 0, "cacheRead": 0, "cost": 0.0}
         parsed, text, session = None, "", None
@@ -181,18 +207,26 @@ class PiBackend(Backend):
                 break
             except ValidationError as exc:
                 # No session is kept, so the retry has to carry its own context.
-                prompt = (f"{user}\n\n<previous_reply>\n{text}\n</previous_reply>\n"
-                          f"That reply could not be used: {exc.errors()[:3]}\n"
-                          "Reply again with only the corrected JSON object.")
+                prompt = (
+                    f"{user}\n\n<previous_reply>\n{text}\n</previous_reply>\n"
+                    f"That reply could not be used: {exc.errors()[:3]}\n"
+                    "Reply again with only the corrected JSON object."
+                )
 
         used = "/".join(x for x in (message.get("provider"), message.get("model")) if x)
         return Completion(
             parsed=parsed,
             text=text,
-            usage=Usage(input_tokens=int(totals["input"]),
-                        output_tokens=int(totals["output"]),
-                        cache_read_input_tokens=int(totals["cacheRead"])),
+            usage=Usage(
+                input_tokens=int(totals["input"]),
+                output_tokens=int(totals["output"]),
+                cache_read_input_tokens=int(totals["cacheRead"]),
+            ),
             request_id=session,
-            meta={"effort": thinking, "model": used or model or "pi default",
-                  "attempts": attempts, "reported_cost_usd": round(totals["cost"], 6)},
+            meta={
+                "effort": thinking,
+                "model": used or model or "pi default",
+                "attempts": attempts,
+                "reported_cost_usd": round(totals["cost"], 6),
+            },
         )

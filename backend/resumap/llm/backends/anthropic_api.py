@@ -1,4 +1,5 @@
 """The Anthropic API backend: one ``messages.parse`` call per request."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -26,10 +27,12 @@ class AnthropicApiBackend(Backend):
 
     def unavailable(self) -> str | None:
         if self._api_key() is None:
-            return ("No ANTHROPIC_API_KEY found. Add it to the .env file in the "
-                    "project root, then restart the app. To bill a Claude "
-                    "subscription through your local Claude Code install instead, "
-                    "set RESUMAP_BACKEND=claude_code.")
+            return (
+                "No ANTHROPIC_API_KEY found. Add it to the .env file in the "
+                "project root, then restart the app. To bill a Claude "
+                "subscription through your local Claude Code install instead, "
+                "set RESUMAP_BACKEND=claude_code."
+            )
         return None
 
     @staticmethod
@@ -40,9 +43,16 @@ class AnthropicApiBackend(Backend):
         except Exception:  # noqa: BLE001
             return ""
 
-    async def complete(self, *, model: str, system: str, user: str,
-                       schema: type[BaseModel], max_tokens: int,
-                       effort: Effort) -> Completion:
+    async def complete(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+        max_tokens: int,
+        effort: Effort,
+    ) -> Completion:
         client = anthropic.AsyncAnthropic(api_key=self._api_key(), max_retries=3)
         resp = await client.messages.parse(
             model=model,
@@ -59,8 +69,7 @@ class AnthropicApiBackend(Backend):
             usage=Usage(
                 input_tokens=int(getattr(u, "input_tokens", 0) or 0),
                 output_tokens=int(getattr(u, "output_tokens", 0) or 0),
-                cache_read_input_tokens=int(
-                    getattr(u, "cache_read_input_tokens", 0) or 0),
+                cache_read_input_tokens=int(getattr(u, "cache_read_input_tokens", 0) or 0),
             ),
             request_id=getattr(resp, "_request_id", None),
             meta={"effort": effort},

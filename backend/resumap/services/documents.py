@@ -4,6 +4,7 @@ The parser writes the document as a dict and the renderer reads one, so the
 helpers that sit between them take and return that form too
 (``ResumeDoc.as_dict()``). None of them touch storage.
 """
+
 from __future__ import annotations
 
 from ..domain import Rewrite, experience_id
@@ -22,8 +23,9 @@ def placements(doc: dict) -> list[dict]:
         if b["kind"] not in ("entry", "section"):
             continue
         text = left_text(b) + (f" ({b['right']})" if b.get("right") else "")
-        out.append({"id": b["id"], "kind": b["kind"], "text": text,
-                    "section": b.get("section", "")})
+        out.append(
+            {"id": b["id"], "kind": b["kind"], "text": text, "section": b.get("section", "")}
+        )
     return out
 
 
@@ -39,8 +41,11 @@ def entry_context(doc: dict, block_id: str) -> tuple[str, list[str]]:
         if b["kind"] in ("entry", "section"):
             if found:
                 break
-            entry = (left_text(b) + (f" ({b['right']})" if b.get("right") else "")
-                     if b["kind"] == "entry" else "")
+            entry = (
+                left_text(b) + (f" ({b['right']})" if b.get("right") else "")
+                if b["kind"] == "entry"
+                else ""
+            )
             group = []
         elif b["id"] == block_id:
             found = True
@@ -56,10 +61,13 @@ def render_doc(doc: dict, rewrites: dict[str, Rewrite]) -> dict:
     on every render, so dropping or re-placing a bullet needs no clean-up.
     """
     inserts = sorted(
-        ({"id": bid, "text": rw.rewritten.strip(), "placement": rw.meta.placement or ""}
-         for bid, rw in rewrites.items()
-         if experience_id(bid) is not None and rw.in_export),
-        key=lambda x: experience_id(x["id"]) or 0)
+        (
+            {"id": bid, "text": rw.rewritten.strip(), "placement": rw.meta.placement or ""}
+            for bid, rw in rewrites.items()
+            if experience_id(bid) is not None and rw.in_export
+        ),
+        key=lambda x: experience_id(x["id"]) or 0,
+    )
     return insert_blocks(doc, inserts)
 
 

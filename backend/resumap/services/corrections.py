@@ -1,4 +1,5 @@
 """The corrections chat: block edits and layout changes asked for on the preview."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -31,21 +32,30 @@ def chat_blocks(doc: dict, rewrites: dict[str, Rewrite], stats: dict) -> list[di
         rw = rewrites.get(b["id"])
         st = stats.get(b["id"]) or {}
         new = bool(b.get("inserted"))
-        out.append({
-            "id": b["id"], "kind": b["kind"], "section": b.get("section", ""),
-            "text": rw.rewritten if rw is not None and rw.in_export else left_text(b),
-            "original": rw.original if new and rw is not None else left_text(b),
-            "new": new, "right": b.get("right", ""),
-            "pending": rw is not None and rw.status == RewriteStatus.PENDING,
-            "lines": st.get("lines", 1), "source_lines": st.get("source_lines", 1),
-            "chars_per_line": st.get("chars_per_line", 0),
-        })
+        out.append(
+            {
+                "id": b["id"],
+                "kind": b["kind"],
+                "section": b.get("section", ""),
+                "text": rw.rewritten if rw is not None and rw.in_export else left_text(b),
+                "original": rw.original if new and rw is not None else left_text(b),
+                "new": new,
+                "right": b.get("right", ""),
+                "pending": rw is not None and rw.status == RewriteStatus.PENDING,
+                "lines": st.get("lines", 1),
+                "source_lines": st.get("source_lines", 1),
+                "chars_per_line": st.get("chars_per_line", 0),
+            }
+        )
     return out
 
 
 def _applied(m: ChatMessage) -> bool:
-    return m.role == ChatRole.ASSISTANT and not m.meta.get("undone") and bool(
-        m.meta.get("edits") or m.meta.get("layout"))
+    return (
+        m.role == ChatRole.ASSISTANT
+        and not m.meta.get("undone")
+        and bool(m.meta.get("edits") or m.meta.get("layout"))
+    )
 
 
 class CorrectionService(Service):
@@ -64,10 +74,13 @@ class CorrectionService(Service):
         last = next((m.id for m in reversed(msgs) if _applied(m)), None)
         return ChatState(
             messages=[
-                ChatMessageOut(id=m.id, role=m.role, text=m.text,
-                               meta=ChatMetaOut(**{k: v for k, v in m.meta.items()
-                                                   if k != "before"}),
-                               can_undo=m.id == last)
+                ChatMessageOut(
+                    id=m.id,
+                    role=m.role,
+                    text=m.text,
+                    meta=ChatMetaOut(**{k: v for k, v in m.meta.items() if k != "before"}),
+                    can_undo=m.id == last,
+                )
                 for m in msgs
             ],
             rewrites=self.store.rewrites.for_job(job_id),
@@ -98,8 +111,11 @@ class CorrectionService(Service):
         try:
             rev = await self.gateway.revise_pdf(
                 blocks=chat_blocks(doc, rewrites, fit["blocks"]),
-                layout=layout, fit=fit, geometry=doc.get("geometry") or {},
-                role=job.role, company=job.company,
+                layout=layout,
+                fit=fit,
+                geometry=doc.get("geometry") or {},
+                role=job.role,
+                company=job.company,
                 jd_points=[p.model_dump(mode="json") for p in job.points],
                 history=[m.model_dump(mode="json") for m in history[-CHAT_HISTORY:]],
                 message=message,
@@ -119,23 +135,39 @@ class CorrectionService(Service):
                 bid = e["block_id"]
                 old = rewrites.get(bid)
                 before[bid] = old.model_dump(mode="json", exclude_unset=True) if old else None
-                meta = {**(stored_meta(old) if old else {}),
-                        "substitutions": e["substitutions"],
-                        "defensible": e["defensible"], "source": "chat"}
-                self.store.rewrites.save(job_id, bid,
-                                         original=old.original if old else left_text(blocks[bid]),
-                                         rewritten=e["text"], status=RewriteStatus.EDITED,
-                                         meta=meta)
+                meta = {
+                    **(stored_meta(old) if old else {}),
+                    "substitutions": e["substitutions"],
+                    "defensible": e["defensible"],
+                    "source": "chat",
+                }
+                self.store.rewrites.save(
+                    job_id,
+                    bid,
+                    original=old.original if old else left_text(blocks[bid]),
+                    rewritten=e["text"],
+                    status=RewriteStatus.EDITED,
+                    meta=meta,
+                )
             if changed:
                 self.store.layouts.set(job_id, new_layout)
             self.store.chat.add(job_id, ChatRole.USER, message, {})
-            self.store.chat.add(job_id, ChatRole.ASSISTANT, rev["reply"] or "Done.", {
-                "edits": [e["block_id"] for e in rev["edits"]],
-                "layout": changed,
-                "before": {"rewrites": before, "layout": layout},
-            })
-        obs.event("pdfchat.applied", job_id=job_id, edits=len(rev["edits"]),
-                  layout=sorted(changed) or None)
+            self.store.chat.add(
+                job_id,
+                ChatRole.ASSISTANT,
+                rev["reply"] or "Done.",
+                {
+                    "edits": [e["block_id"] for e in rev["edits"]],
+                    "layout": changed,
+                    "before": {"rewrites": before, "layout": layout},
+                },
+            )
+        obs.event(
+            "pdfchat.applied",
+            job_id=job_id,
+            edits=len(rev["edits"]),
+            layout=sorted(changed) or None,
+        )
         return self._state(job_id)
 
     def undo(self, job_id: int, message_id: int) -> ChatState:
@@ -156,12 +188,20 @@ class CorrectionService(Service):
                 if row is None:
                     self.store.rewrites.delete(job_id, bid)
                 else:
-                    self.store.rewrites.save(job_id, bid, original=row["original"],
-                                             rewritten=row["rewritten"],
-                                             status=RewriteStatus(row["status"]),
-                                             meta=row["meta"])
+                    self.store.rewrites.save(
+                        job_id,
+                        bid,
+                        original=row["original"],
+                        rewritten=row["rewritten"],
+                        status=RewriteStatus(row["status"]),
+                        meta=row["meta"],
+                    )
             self.store.layouts.set(job_id, before.get("layout") or {})
             self.store.chat.set_meta(message_id, {**target.meta, "undone": True})
-        obs.event("pdfchat.undone", job_id=job_id, message=message_id,
-                  edits=len(before.get("rewrites") or {}))
+        obs.event(
+            "pdfchat.undone",
+            job_id=job_id,
+            message=message_id,
+            edits=len(before.get("rewrites") or {}),
+        )
         return self._state(job_id)

@@ -3,6 +3,7 @@
 Response models belong to the services that produce them (services/results.py);
 the routers only declare them. Bodies ignore unknown fields.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -17,10 +18,12 @@ class ErrorOut(BaseModel):
 
     detail: str
     errors: list[dict[str, Any]] | None = Field(
-        default=None, description="Per-field validation errors, on a 422 only.")
+        default=None, description="Per-field validation errors, on a 422 only."
+    )
 
 
 # -- request bodies ---------------------------------------------------------
+
 
 class JobCreate(BaseModel):
     resume_id: int
@@ -50,7 +53,8 @@ class BoxModeBody(BaseModel):
 
 class TransformBody(BaseModel):
     block_ids: list[str] | None = Field(
-        default=None, description="Re-roll only these boxes; every mapped box when omitted.")
+        default=None, description="Re-roll only these boxes; every mapped box when omitted."
+    )
     extra: str = Field(default="", description="A note for the model, e.g. a tone request.")
 
 

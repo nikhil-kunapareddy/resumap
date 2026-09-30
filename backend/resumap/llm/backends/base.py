@@ -5,6 +5,7 @@ back as one validated instance of that model, so the gateway does not care
 which backend is live. No backend lets the model use tools: these are single
 structured requests, not agent loops.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -69,9 +70,16 @@ class Backend(ABC):
         """Why this backend cannot run right now, or None if it is ready."""
 
     @abstractmethod
-    async def complete(self, *, model: str, system: str, user: str,
-                       schema: type[BaseModel], max_tokens: int,
-                       effort: Effort) -> Completion:
+    async def complete(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+        max_tokens: int,
+        effort: Effort,
+    ) -> Completion:
         """One structured request; ``parsed`` is None if nothing validated."""
 
 
@@ -90,21 +98,26 @@ def cli_env(dotenv_keys: Mapping[str, str]) -> dict[str, str]:
     return env
 
 
-async def run_cli(cmd: list[str], stdin_text: str | None, *, cwd: str,
-                  env: dict[str, str], timeout: float) -> tuple[int, str, str]:
+async def run_cli(
+    cmd: list[str], stdin_text: str | None, *, cwd: str, env: dict[str, str], timeout: float
+) -> tuple[int, str, str]:
     """Run a CLI backend once: (exit code, stdout, stderr), killed on timeout."""
     proc = await asyncio.create_subprocess_exec(
-        *cmd, cwd=cwd, env=env,
+        *cmd,
+        cwd=cwd,
+        env=env,
         stdin=asyncio.subprocess.PIPE if stdin_text is not None else asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     try:
         out, err = await asyncio.wait_for(
-            proc.communicate(stdin_text.encode() if stdin_text is not None else None),
-            timeout)
+            proc.communicate(stdin_text.encode() if stdin_text is not None else None), timeout
+        )
     except asyncio.TimeoutError as exc:
         proc.kill()
         await proc.wait()
         raise RuntimeError(
-            f"{os.path.basename(cmd[0])} gave no answer within {timeout:.0f}s") from exc
+            f"{os.path.basename(cmd[0])} gave no answer within {timeout:.0f}s"
+        ) from exc
     return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")

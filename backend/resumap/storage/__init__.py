@@ -4,6 +4,7 @@
 and injected into each request handler, so nothing imports a database path
 or opens a connection of its own.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -50,6 +51,17 @@ class Store:
             yield
 
 
-__all__ = ["Database", "Store", "ChatRepository", "ExperienceRepository", "JobRepository",
-           "LayoutRepository", "MappingRepository", "OutreachExampleRepository",
-           "OutreachRepository", "ResumeRepository", "RewriteRepository", "SettingsRepository"]
+__all__ = [
+    "Database",
+    "Store",
+    "ChatRepository",
+    "ExperienceRepository",
+    "JobRepository",
+    "LayoutRepository",
+    "MappingRepository",
+    "OutreachExampleRepository",
+    "OutreachRepository",
+    "ResumeRepository",
+    "RewriteRepository",
+    "SettingsRepository",
+]

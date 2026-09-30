@@ -5,6 +5,7 @@ bullet wrapping inside its column, or a pasted job description that arrives
 hard-wrapped at ~72 characters. Getting that wrong produces points that stop
 mid-clause, so the joining rules live in one place.
 """
+
 from __future__ import annotations
 
 import re
@@ -17,30 +18,130 @@ TERMINATOR_RE = re.compile(r"[.!?][\"')\]]?\s*$")
 # Cannot end an English sentence, so a line ending here is certainly cut off
 # and the word is safe to remove when repairing a fragment.
 HARD_DANGLING = (
-    "and", "or", "but", "nor", "the", "a", "an", "of", "that", "which", "who",
-    "whom", "into", "onto", "across", "through", "using", "via", "per", "than",
-    "then", "while", "when", "if", "its", "their", "our", "his", "her", "your",
-    "my", "this", "these", "those", "both", "including", "include", "such",
-    "between", "among", "within", "upon", "during", "against", "toward",
-    "towards", "plus", "not", "limited", "without", "is", "are", "was", "were",
-    "be", "been", "being", "has", "have", "had", "will", "would", "can",
-    "could", "may", "might", "must", "should", "do", "does",
+    "and",
+    "or",
+    "but",
+    "nor",
+    "the",
+    "a",
+    "an",
+    "of",
+    "that",
+    "which",
+    "who",
+    "whom",
+    "into",
+    "onto",
+    "across",
+    "through",
+    "using",
+    "via",
+    "per",
+    "than",
+    "then",
+    "while",
+    "when",
+    "if",
+    "its",
+    "their",
+    "our",
+    "his",
+    "her",
+    "your",
+    "my",
+    "this",
+    "these",
+    "those",
+    "both",
+    "including",
+    "include",
+    "such",
+    "between",
+    "among",
+    "within",
+    "upon",
+    "during",
+    "against",
+    "toward",
+    "towards",
+    "plus",
+    "not",
+    "limited",
+    "without",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "has",
+    "have",
+    "had",
+    "will",
+    "would",
+    "can",
+    "could",
+    "may",
+    "might",
+    "must",
+    "should",
+    "do",
+    "does",
 )
 
 # Prepositions that CAN end a sentence -- "models the ML engineers depend on",
 # "the platform we migrated to". These still signal a possible continuation, so
 # they count for detection, but stripping them would change the meaning.
 SOFT_DANGLING = (
-    "to", "with", "on", "in", "for", "by", "from", "at", "as", "about", "over",
-    "under", "after", "before", "up", "down", "out", "off", "around", "along",
+    "to",
+    "with",
+    "on",
+    "in",
+    "for",
+    "by",
+    "from",
+    "at",
+    "as",
+    "about",
+    "over",
+    "under",
+    "after",
+    "before",
+    "up",
+    "down",
+    "out",
+    "off",
+    "around",
+    "along",
     # Participles that take an object: a line ending on a bare one of these is
     # almost certainly cut off ("the ingestion path now handling"). Detection
     # only -- peeling them would mangle the sentence.
-    "handling", "including", "spanning", "processing", "covering", "serving",
-    "supporting", "enabling", "involving", "comprising", "totaling",
-    "totalling", "representing", "exceeding", "featuring", "containing",
-    "targeting", "achieving", "yielding", "leveraging", "utilizing",
-    "employing", "combining", "integrating", "delivering",
+    "handling",
+    "including",
+    "spanning",
+    "processing",
+    "covering",
+    "serving",
+    "supporting",
+    "enabling",
+    "involving",
+    "comprising",
+    "totaling",
+    "totalling",
+    "representing",
+    "exceeding",
+    "featuring",
+    "containing",
+    "targeting",
+    "achieving",
+    "yielding",
+    "leveraging",
+    "utilizing",
+    "employing",
+    "combining",
+    "integrating",
+    "delivering",
 )
 
 DANGLING_WORDS = HARD_DANGLING + SOFT_DANGLING
@@ -108,8 +209,7 @@ def ensure_stop(text: str) -> str:
     # "applications, to" that need two passes.
     # Only HARD_DANGLING is peeled: removing a soft preposition would turn
     # "models the ML engineers depend on" into "... depend".
-    dangling_tail = re.compile(
-        r"(?:^|\s+)\b(?:" + "|".join(HARD_DANGLING) + r")\b$", re.I)
+    dangling_tail = re.compile(r"(?:^|\s+)\b(?:" + "|".join(HARD_DANGLING) + r")\b$", re.I)
     for _ in range(8):
         before = t
         t = PUNCT_TAIL_RE.sub("", t).strip()

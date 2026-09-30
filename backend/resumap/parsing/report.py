@@ -1,4 +1,5 @@
 """The parse report: every block, its kind and flags, and the rule that excluded it."""
+
 from __future__ import annotations
 
 import os
@@ -23,8 +24,7 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
 
     def linked(b: dict[str, Any]) -> int:
         """How many of a block's runs carry a hyperlink."""
-        return sum(1 for r in (b.get("runs") or []) + (b.get("right_runs") or [])
-                   if r.get("uri"))
+        return sum(1 for r in (b.get("runs") or []) + (b.get("right_runs") or []) if r.get("uri"))
 
     blocks = doc.get("blocks") or []
     out: list[str] = [
@@ -45,12 +45,14 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
         "-" * 78,
     ]
     for b in blocks:
-        flags = "".join([
-            "R" if b.get("right") else "-",
-            "J" if b.get("justified") else "-",
-            "T" if b.get("truncated") else "-",
-            "L" if linked(b) else "-",
-        ])
+        flags = "".join(
+            [
+                "R" if b.get("right") else "-",
+                "J" if b.get("justified") else "-",
+                "T" if b.get("truncated") else "-",
+                "L" if linked(b) else "-",
+            ]
+        )
         reason = "" if b.get("mappable") else (b.get("reason") or "?")
         out.append(
             f"{'->' if b.get('mappable') else '':<3}"
@@ -67,8 +69,9 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
-def write_parse_report(log_dir: Path, resume_id: int, label: str,
-                       doc: dict[str, Any]) -> Path | None:
+def write_parse_report(
+    log_dir: Path, resume_id: int, label: str, doc: dict[str, Any]
+) -> Path | None:
     try:
         directory = log_dir / "parse"
         directory.mkdir(parents=True, exist_ok=True)

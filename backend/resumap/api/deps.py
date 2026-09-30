@@ -1,4 +1,5 @@
 """What a route is handed: the app's Services, built once in ``create_app``."""
+
 from __future__ import annotations
 
 from typing import Annotated

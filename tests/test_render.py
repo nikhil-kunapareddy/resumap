@@ -1,4 +1,5 @@
 """rendering/: the export mirrors the source, fits one page and passes its self-check."""
+
 from __future__ import annotations
 
 import copy
@@ -39,11 +40,11 @@ def _ids(doc: dict, kind: str) -> list[str]:
 
 # -- the renderer yardstick -------------------------------------------------
 
+
 def test_untouched_upload_rerenders_line_for_line_on_one_page(doc, tmp_path):
     fit = render_resume(doc, str(tmp_path / "out.pdf"))
     assert fit["pages"] == 1
-    moved = {bid: st for bid, st in fit["blocks"].items()
-             if st["lines"] != st["source_lines"]}
+    moved = {bid: st for bid, st in fit["blocks"].items() if st["lines"] != st["source_lines"]}
     assert moved == {}
     # "At most a trace of compression": the font is untouched and spacing is
     # within 2% of the source.
@@ -73,6 +74,7 @@ def test_every_source_bullet_survives_into_the_text_layer(doc, tmp_path):
 
 # -- overrides --------------------------------------------------------------
 
+
 def test_an_override_replaces_only_its_own_block(doc, tmp_path):
     target = _ids(doc, "bullet")[1]
     new = "Cut nightly batch runtime by 40% by tuning Spark jobs and partitioning by date."
@@ -89,8 +91,9 @@ def test_an_override_replaces_only_its_own_block(doc, tmp_path):
 
 def test_render_does_not_mutate_the_parsed_document(doc, tmp_path):
     before = copy.deepcopy(doc)
-    render_resume(doc, str(tmp_path / "out.pdf"), {_ids(doc, "bullet")[0]: "Changed."},
-                  layout={"font": 1.1})
+    render_resume(
+        doc, str(tmp_path / "out.pdf"), {_ids(doc, "bullet")[0]: "Changed."}, layout={"font": 1.1}
+    )
     assert doc == before
 
 
@@ -105,10 +108,19 @@ def test_overflowing_content_is_squeezed_back_onto_one_page(doc, tmp_path):
 
 # -- layout -----------------------------------------------------------------
 
+
 def test_clean_layout_clamps_and_ignores_what_it_cannot_honour():
     assert clean_layout(None) == LAYOUT_DEFAULTS
-    out = clean_layout({"font": 5, "leading": 0.1, "spacing": "wide",
-                        "margin_x": 10, "justify": "sideways", "colour": "red"})
+    out = clean_layout(
+        {
+            "font": 5,
+            "leading": 0.1,
+            "spacing": "wide",
+            "margin_x": 10,
+            "justify": "sideways",
+            "colour": "red",
+        }
+    )
     assert out["font"] == 1.3
     assert out["leading"] == 0.7
     assert out["spacing"] == LAYOUT_DEFAULTS["spacing"]
@@ -127,6 +139,7 @@ def test_a_layout_change_moves_the_page(doc, tmp_path):
 
 # -- budgets ----------------------------------------------------------------
 
+
 def test_line_budget_covers_every_block_and_tracks_its_length(doc):
     budget = line_budget(doc)
     assert set(budget) == {b["id"] for b in doc["blocks"]}
@@ -135,8 +148,11 @@ def test_line_budget_covers_every_block_and_tracks_its_length(doc):
             assert budget[b["id"]] >= 0.95 * len(b["text"]), b["id"]
 
 
-@pytest.mark.xfail(strict=True, reason="on a nearly full line the budget sits below the "
-                                       "original's own length (bul009: 102 < 103)")
+@pytest.mark.xfail(
+    strict=True,
+    reason="on a nearly full line the budget sits below the "
+    "original's own length (bul009: 102 < 103)",
+)
 def test_every_untouched_point_fits_its_own_line_budget(doc):
     budget = line_budget(doc)
     assert all(len(b["text"]) <= budget[b["id"]] for b in doc["blocks"] if b["mappable"])
@@ -149,6 +165,7 @@ def test_a_new_bullet_gets_about_two_lines(doc):
 
 
 # -- inserted bullets -------------------------------------------------------
+
 
 def _insert(doc: dict, placement: str, text: str = "Built a Go CLI that validates DAGs.") -> dict:
     return insert_blocks(doc, [{"id": "exp001", "text": text, "placement": placement}])
@@ -201,11 +218,15 @@ def test_a_document_with_an_insert_still_fits_one_page(doc, tmp_path):
 
 # -- filenames --------------------------------------------------------------
 
-@pytest.mark.parametrize("first, company, expected", [
-    ("Jane", "Contoso Group!", "jane_contosogroup_0929.pdf"),
-    ("", "Contoso", "resume_contoso_0929.pdf"),
-    ("Jane", "", "jane_company_0929.pdf"),
-    ("J@ne D.", "Northwind & Co", "jned_northwindco_0929.pdf"),
-])
+
+@pytest.mark.parametrize(
+    "first, company, expected",
+    [
+        ("Jane", "Contoso Group!", "jane_contosogroup_0929.pdf"),
+        ("", "Contoso", "resume_contoso_0929.pdf"),
+        ("Jane", "", "jane_company_0929.pdf"),
+        ("J@ne D.", "Northwind & Co", "jned_northwindco_0929.pdf"),
+    ],
+)
 def test_export_filename(first, company, expected):
     assert export_filename(first, company, date(2026, 9, 29)) == expected

@@ -1,4 +1,5 @@
 """Rendering a job's tailored resume to one PDF page, and checking it."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,8 +32,12 @@ class ExportService(Service):
         name = export_filename(self.settings.first_name(), job.company or "company")
         self.paths.ensure()
         out = self.paths.exports / (f"_preview_{job_id}.pdf" if preview else name)
-        fit = render_resume(render_doc(resume.doc.as_dict(), rewrites), str(out),
-                            overrides(rewrites), layout=self.store.layouts.get(job_id))
+        fit = render_resume(
+            render_doc(resume.doc.as_dict(), rewrites),
+            str(out),
+            overrides(rewrites),
+            layout=self.store.layouts.get(job_id),
+        )
         return out, name, fit
 
     def preview(self, job_id: int) -> Path:
@@ -44,15 +49,22 @@ class ExportService(Service):
         rewrites = self.store.rewrites.for_job(job_id)
         job = self.store.jobs.get(job_id)
         resume = self.store.resumes.get(job.resume_id) if job else None
-        check = verify_pdf(out, resume.doc.as_dict() if resume else {},
-                           resume.stored_path if resume else None)
+        check = verify_pdf(
+            out, resume.doc.as_dict() if resume else {}, resume.stored_path if resume else None
+        )
         applied = sum(1 for rw in rewrites.values() if rw.status.included)
-        obs.event("export.done", job_id=job_id, filename=name,
-                  bytes=out.stat().st_size, pages=fit["pages"],
-                  font_scale=fit["font_scale"], cramped=fit["cramped"],
-                  applied=applied,
-                  selfcheck_ok=check.get("ok"),
-                  problems=check.get("problems") or None)
+        obs.event(
+            "export.done",
+            job_id=job_id,
+            filename=name,
+            bytes=out.stat().st_size,
+            pages=fit["pages"],
+            font_scale=fit["font_scale"],
+            cramped=fit["cramped"],
+            applied=applied,
+            selfcheck_ok=check.get("ok"),
+            problems=check.get("problems") or None,
+        )
         return ExportOut(
             check=SelfCheck(**{k: v for k, v in check.items() if k != "fonts"}),
             filename=name,

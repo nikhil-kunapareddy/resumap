@@ -1,4 +1,5 @@
 """storage/: connections, transactions, and each repository's guarantees."""
+
 from __future__ import annotations
 
 import json
@@ -18,43 +19,80 @@ from resumap.domain import (
 )
 from resumap.storage import Database, Store
 
-DOC = {"name": "Jane Doe", "body_size": 10.0, "leading": 12.5, "diagnostics": {},
-       "geometry": {"width": 612.0, "height": 792.0, "left": 54.0, "right": 54.0,
-                    "top": 54.0, "bottom": 54.0},
-       "blocks": [], "sections": []}
+DOC = {
+    "name": "Jane Doe",
+    "body_size": 10.0,
+    "leading": 12.5,
+    "diagnostics": {},
+    "geometry": {
+        "width": 612.0,
+        "height": 792.0,
+        "left": 54.0,
+        "right": 54.0,
+        "top": 54.0,
+        "bottom": 54.0,
+    },
+    "blocks": [],
+    "sections": [],
+}
 
 
 def _job(store: Store) -> Job:
-    resume = store.resumes.add(label="r", filename="r.pdf", stored_path="/tmp/r.pdf",
-                               person="Jane", doc=DOC)
-    return store.jobs.add(resume_id=resume.id, company="Contoso", role="Data Engineer",
-                          raw="raw", points=[{"id": "jd01", "text": "Operate Kafka."}],
-                          mode=RewriteMode.AGGRESSIVE)
+    resume = store.resumes.add(
+        label="r", filename="r.pdf", stored_path="/tmp/r.pdf", person="Jane", doc=DOC
+    )
+    return store.jobs.add(
+        resume_id=resume.id,
+        company="Contoso",
+        role="Data Engineer",
+        raw="raw",
+        points=[{"id": "jd01", "text": "Operate Kafka."}],
+        mode=RewriteMode.AGGRESSIVE,
+    )
 
 
 def _rewrite(store: Store, job_id: int, block_id: str = "bul005", text: str = "new") -> None:
-    store.rewrites.save(job_id, block_id, original="old", rewritten=text,
-                        status=RewriteStatus.PENDING, meta={})
+    store.rewrites.save(
+        job_id, block_id, original="old", rewritten=text, status=RewriteStatus.PENDING, meta={}
+    )
 
 
 # -- the database -----------------------------------------------------------
+
 
 def test_init_is_idempotent(paths):
     db = Database(paths.db)
     db.init()
     db.init()
-    tables = {r[0] for r in sqlite3.connect(db.path).execute(
-        "SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"resumes", "jobs", "mappings", "box_modes", "rewrites", "outreach", "layouts",
-            "chat", "experiences", "outreach_examples", "settings"} <= tables
+    tables = {
+        r[0]
+        for r in sqlite3.connect(db.path).execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    assert {
+        "resumes",
+        "jobs",
+        "mappings",
+        "box_modes",
+        "rewrites",
+        "outreach",
+        "layouts",
+        "chat",
+        "experiences",
+        "outreach_examples",
+        "settings",
+    } <= tables
 
 
 def test_added_columns_reach_a_table_that_already_exists(tmp_path):
     path = tmp_path / "old.db"
     with sqlite3.connect(path) as conn:
-        conn.execute("CREATE TABLE outreach (job_id INTEGER PRIMARY KEY, recruiter TEXT, "
-                     "linkedin TEXT, email_subject TEXT, email_body TEXT, meta_json TEXT, "
-                     "updated_at REAL)")
+        conn.execute(
+            "CREATE TABLE outreach (job_id INTEGER PRIMARY KEY, recruiter TEXT, "
+            "linkedin TEXT, email_subject TEXT, email_body TEXT, meta_json TEXT, "
+            "updated_at REAL)"
+        )
     Database(path).init()
     cols = {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(outreach)")}
     assert "linkedin_subject" in cols
@@ -69,11 +107,13 @@ def test_every_call_closes_its_connection(store):
 
 def test_foreign_keys_are_enforced(store):
     with pytest.raises(sqlite3.IntegrityError):
-        store.jobs.add(resume_id=999, company="", role="", raw="", points=[],
-                       mode=RewriteMode.AGGRESSIVE)
+        store.jobs.add(
+            resume_id=999, company="", role="", raw="", points=[], mode=RewriteMode.AGGRESSIVE
+        )
 
 
 # -- transactions -----------------------------------------------------------
+
 
 def test_a_transaction_commits_every_write_together(store):
     job = _job(store)
@@ -115,6 +155,7 @@ def test_a_transaction_on_one_database_leaves_another_alone(store, tmp_path):
 
 # -- repositories -----------------------------------------------------------
 
+
 def test_add_returns_the_stored_entity(store):
     job = _job(store)
     assert isinstance(job, Job) and job.company == "Contoso" and job.points[0].id == "jd01"
@@ -131,8 +172,12 @@ def test_deleting_a_job_cascades_to_everything_keyed_on_it(store):
     store.layouts.set(job.id, {"font": 0.9})
     store.chat.add(job.id, "user", "hi", {})
     store.jobs.delete(job.id)
-    assert (store.mappings.for_job(job.id), store.rewrites.for_job(job.id),
-            store.layouts.get(job.id), store.chat.for_job(job.id)) == ({}, {}, {}, [])
+    assert (
+        store.mappings.for_job(job.id),
+        store.rewrites.for_job(job.id),
+        store.layouts.get(job.id),
+        store.chat.for_job(job.id),
+    ) == ({}, {}, {}, [])
 
 
 def test_update_changes_only_the_fields_given(store):
@@ -141,7 +186,7 @@ def test_update_changes_only_the_fields_given(store):
     got = store.jobs.get(job.id)
     assert (got.company, got.role, got.mode) == ("Contoso", "Staff Engineer", "aggressive")
     with pytest.raises(TypeError):
-        store.jobs.update(job.id, raw_text="changed")   # not an updatable column
+        store.jobs.update(job.id, raw_text="changed")  # not an updatable column
 
 
 def test_map_box_replaces_a_boxs_points(store):
@@ -162,10 +207,22 @@ def test_box_modes_round_trip_and_inherit_clears(store):
 
 def test_saving_a_rewrite_twice_keeps_its_original(store):
     job = _job(store)
-    store.rewrites.save(job.id, "bul005", original="first", rewritten="v1",
-                        status=RewriteStatus.PENDING, meta={"keywords_used": ["a"]})
-    store.rewrites.save(job.id, "bul005", original="second", rewritten="v2",
-                        status=RewriteStatus.ACCEPTED, meta={"defensible": False})
+    store.rewrites.save(
+        job.id,
+        "bul005",
+        original="first",
+        rewritten="v1",
+        status=RewriteStatus.PENDING,
+        meta={"keywords_used": ["a"]},
+    )
+    store.rewrites.save(
+        job.id,
+        "bul005",
+        original="second",
+        rewritten="v2",
+        status=RewriteStatus.ACCEPTED,
+        meta={"defensible": False},
+    )
     rw = store.rewrites.get(job.id, "bul005")
     assert (rw.original, rw.rewritten, rw.status) == ("first", "v2", "accepted")
     assert (rw.meta.keywords_used, rw.meta.defensible) == ([], False)
@@ -174,13 +231,24 @@ def test_saving_a_rewrite_twice_keeps_its_original(store):
 def test_a_model_is_written_back_exactly_as_it_was_read(store):
     """Defaults the model fills in on read must not leak into the stored JSON."""
     job = _job(store)
-    store.rewrites.save(job.id, "bul005", original="o", rewritten="r",
-                        status=RewriteStatus.PENDING,
-                        meta={"keywords_used": ["Kafka"], "future_field": 1})
+    store.rewrites.save(
+        job.id,
+        "bul005",
+        original="o",
+        rewritten="r",
+        status=RewriteStatus.PENDING,
+        meta={"keywords_used": ["Kafka"], "future_field": 1},
+    )
     rw = store.rewrites.get(job.id, "bul005")
-    assert rw.meta.replaced is False            # a default, filled in on read
-    store.rewrites.save(job.id, "bul005", original=rw.original, rewritten=rw.rewritten,
-                        status=rw.status, meta=rw.meta)
+    assert rw.meta.replaced is False  # a default, filled in on read
+    store.rewrites.save(
+        job.id,
+        "bul005",
+        original=rw.original,
+        rewritten=rw.rewritten,
+        status=rw.status,
+        meta=rw.meta,
+    )
     with sqlite3.connect(store.database.path) as conn:
         stored = conn.execute("SELECT meta_json FROM rewrites").fetchone()[0]
     assert json.loads(stored) == {"keywords_used": ["Kafka"], "future_field": 1}

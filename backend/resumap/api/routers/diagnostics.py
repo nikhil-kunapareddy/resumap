@@ -1,4 +1,5 @@
 """Diagnostics: the parse report and token usage."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -21,5 +22,4 @@ def debug_parse(resume_id: int, services: ServicesDep) -> str:
 def debug_usage(services: ServicesDep) -> UsageOut:
     """Token and cost totals for this process, broken down by operation."""
     registry = services.gateway.registry
-    return UsageOut(model=registry.model_label(), backend=registry.current_name(),
-                    **obs.totals())
+    return UsageOut(model=registry.model_label(), backend=registry.current_name(), **obs.totals())

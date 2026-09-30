@@ -3,6 +3,7 @@
 Upload, job description, map, transform, review, export, corrections chat and
 outreach, all against throwaway storage and the scripted backend.
 """
+
 from __future__ import annotations
 
 import io
@@ -20,19 +21,20 @@ EXP_NOTES = "Wrote a Go CLI that lints Airflow DAGs before deploy; 40 stars on G
 
 # -- helpers ----------------------------------------------------------------
 
+
 def text_of(resume: dict, block_id: str) -> str:
     return next(b["text"] for b in resume["blocks"] if b["id"] == block_id)
 
 
 def map_box(client, job: dict, block_id: str, *points: str) -> None:
-    r = client.post(f"/api/jobs/{job['id']}/mappings",
-                    json={"block_id": block_id, "point_ids": list(points)})
+    r = client.post(
+        f"/api/jobs/{job['id']}/mappings", json={"block_id": block_id, "point_ids": list(points)}
+    )
     assert r.status_code == 200, r.text
 
 
 def add_experience(client, text: str = EXP_NOTES, kind: str = "project") -> dict:
-    r = client.post("/api/experiences", json={"kind": kind, "title": "DAG linter",
-                                              "text": text})
+    r = client.post("/api/experiences", json={"kind": kind, "title": "DAG linter", "text": text})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -64,6 +66,7 @@ def export(client, job: dict) -> tuple[dict, str]:
 
 
 # -- upload -----------------------------------------------------------------
+
 
 def test_upload_returns_blocks_without_internal_geometry(client, resume):
     assert resume["name"] == "Jane Doe"
@@ -107,6 +110,7 @@ def test_deleting_a_resume_removes_its_file_and_jobs(client, paths, resume, job)
 
 # -- job description --------------------------------------------------------
 
+
 def test_job_points_are_verbatim_and_tagged(job):
     assert [p["text"] for p in job["points"]] == JOB_POINTS
     assert [p["id"] for p in job["points"]] == ["jd01", "jd02", "jd03", "jd04", "jd05"]
@@ -115,10 +119,13 @@ def test_job_points_are_verbatim_and_tagged(job):
     assert all(INVENTED_TERM not in p["keywords"] for p in job["points"])
 
 
-@pytest.mark.parametrize("text, message", [
-    ("Too short.", "too short"),
-    ("Benefits\n- Free lunch and snacks every single day of the week.", "Could not find"),
-])
+@pytest.mark.parametrize(
+    "text, message",
+    [
+        ("Too short.", "too short"),
+        ("Benefits\n- Free lunch and snacks every single day of the week.", "Could not find"),
+    ],
+)
 def test_a_job_description_without_requirements_is_rejected(client, resume, text, message):
     r = client.post("/api/jobs", json={"resume_id": resume["id"], "text": text})
     assert r.status_code == 400 and message in r.json()["detail"]
@@ -131,32 +138,52 @@ def test_a_job_for_a_missing_resume_is_404(client):
 
 def test_job_detail_carries_everything_the_ui_needs(client, job):
     detail = client.get(f"/api/jobs/{job['id']}").json()
-    assert set(detail) == {"id", "resume_id", "company", "role", "mode", "raw", "points",
-                           "mappings", "box_modes", "rewrites", "outreach", "resume"}
+    assert set(detail) == {
+        "id",
+        "resume_id",
+        "company",
+        "role",
+        "mode",
+        "raw",
+        "points",
+        "mappings",
+        "box_modes",
+        "rewrites",
+        "outreach",
+        "resume",
+    }
     assert detail["raw"] == JOB_DESCRIPTION
     assert detail["resume"]["name"] == "Jane Doe"
 
 
 def test_patching_a_job_changes_only_what_was_sent_and_returns_the_job(client, job):
-    r = client.patch(f"/api/jobs/{job['id']}", json={"role": "Staff Data Engineer",
-                                                     "mode": "truthful"})
+    r = client.patch(
+        f"/api/jobs/{job['id']}", json={"role": "Staff Data Engineer", "mode": "truthful"}
+    )
     assert set(r.json()) == {"id", "resume_id", "company", "role", "mode", "created_at"}
     assert (r.json()["id"], r.json()["company"], r.json()["role"], r.json()["mode"]) == (
-        job["id"], "Contoso", "Staff Data Engineer", "truthful")
+        job["id"],
+        "Contoso",
+        "Staff Data Engineer",
+        "truthful",
+    )
     detail = client.get(f"/api/jobs/{job['id']}").json()
     assert (detail["company"], detail["role"], detail["mode"]) == (
-        "Contoso", "Staff Data Engineer", "truthful")
+        "Contoso",
+        "Staff Data Engineer",
+        "truthful",
+    )
 
 
 def test_dropping_a_point_unwires_it_from_every_box(client, job):
     map_box(client, job, "bul005", "jd01", "jd02")
-    r = client.put(f"/api/jobs/{job['id']}/points",
-                   json={"keep": ["jd01", "jd03", "jd04", "jd05"]})
+    r = client.put(f"/api/jobs/{job['id']}/points", json={"keep": ["jd01", "jd03", "jd04", "jd05"]})
     assert r.status_code == 200
     assert (r.json()["dropped"], r.json()["unwired"]) == (["jd02"], 1)
     assert client.get(f"/api/jobs/{job['id']}").json()["mappings"] == {"bul005": ["jd01"]}
-    r = client.post(f"/api/jobs/{job['id']}/mappings",
-                    json={"block_id": "bul006", "point_ids": ["jd02"]})
+    r = client.post(
+        f"/api/jobs/{job['id']}/mappings", json={"block_id": "bul006", "point_ids": ["jd02"]}
+    )
     assert r.status_code == 400
 
 
@@ -167,9 +194,12 @@ def test_keeping_unknown_or_no_points_is_rejected(client, job, keep):
 
 # -- map --------------------------------------------------------------------
 
+
 def test_mapping_to_an_unknown_point_is_rejected(client, job):
-    r = client.post(f"/api/jobs/{job['id']}/mappings",
-                    json={"block_id": "bul005", "point_ids": ["jd01", "jd42"]})
+    r = client.post(
+        f"/api/jobs/{job['id']}/mappings",
+        json={"block_id": "bul005", "point_ids": ["jd01", "jd42"]},
+    )
     assert r.status_code == 400 and "jd42" in r.json()["detail"]
 
 
@@ -185,6 +215,7 @@ def test_box_modes(client, job):
 
 # -- transform --------------------------------------------------------------
 
+
 def test_transform_needs_a_mapped_box(client, job):
     r = client.post(f"/api/jobs/{job['id']}/transform", json={})
     assert r.status_code == 400 and "Nothing to transform" in r.json()["detail"]
@@ -194,16 +225,19 @@ def test_transform_realigns_replaces_and_writes_from_experiences(client, fake, r
     exp = add_experience(client)
     map_box(client, job, "bul005", "jd01")
     map_box(client, job, "bul006", "jd02")
-    client.post(f"/api/jobs/{job['id']}/box-modes", json={"block_id": "bul006",
-                                                          "mode": "replace"})
+    client.post(f"/api/jobs/{job['id']}/box-modes", json={"block_id": "bul006", "mode": "replace"})
     map_box(client, job, exp["key"], "jd04")
 
     out = transform(client, job)
-    assert sorted((r["block_id"], r["ok"]) for r in out["results"]) == sorted([
-        (exp["key"], True), ("bul005", True), ("bul006", True)])
+    assert sorted((r["block_id"], r["ok"]) for r in out["results"]) == sorted(
+        [(exp["key"], True), ("bul005", True), ("bul006", True)]
+    )
     rws = out["rewrites"]
     assert {bid: rw["status"] for bid, rw in rws.items()} == {
-        "bul005": "pending", "bul006": "pending", exp["key"]: "pending"}
+        "bul005": "pending",
+        "bul006": "pending",
+        exp["key"]: "pending",
+    }
 
     realigned = rws["bul005"]
     assert realigned["original"] == text_of(resume, "bul005")
@@ -260,6 +294,7 @@ def test_a_placement_must_name_an_entry_a_section_or_a_short_heading(client, job
 
 # -- review -----------------------------------------------------------------
 
+
 @pytest.fixture
 def transformed(client, job) -> dict:
     """bul005, bul009 and bul010 mapped and transformed, all pending."""
@@ -291,16 +326,21 @@ def test_accept_all_accepts_only_what_is_pending(client, transformed):
     patch_rewrite(client, job, "bul010", status="rejected")
     rws = client.post(f"/api/jobs/{job['id']}/accept-all").json()
     assert {bid: rw["status"] for bid, rw in rws.items()} == {
-        "bul005": "accepted", "bul009": "accepted", "bul010": "rejected"}
+        "bul005": "accepted",
+        "bul009": "accepted",
+        "bul010": "rejected",
+    }
 
 
 # -- export -----------------------------------------------------------------
 
+
 def test_export_applies_accepted_and_edited_rewrites_only(client, resume, transformed):
     job = transformed
     patch_rewrite(client, job, "bul005", status="accepted")
-    patch_rewrite(client, job, "bul009",
-                  text="Designed a PostgreSQL model that cut query times tenfold.")
+    patch_rewrite(
+        client, job, "bul009", text="Designed a PostgreSQL model that cut query times tenfold."
+    )
     out, text = export(client, job)
     assert (out["applied"], out["total"], out["pages"]) == (2, 3, 1)
     assert out["check"]["ok"] is True
@@ -345,14 +385,19 @@ def test_download_serves_only_existing_exports(client, name):
 
 # -- corrections chat -------------------------------------------------------
 
+
 def chat_edit(fake, block_id: str, text: str, font: float | None = None) -> None:
-    fake.respond("PdfRevision", {
-        "reply": "Done.",
-        "edits": [{"block_id": block_id, "text": text, "substitutions": [],
-                   "defensible": True}],
-        "layout": [{"setting": "font_size", "value": font}] if font else [],
-        "justify": "unchanged",
-    })
+    fake.respond(
+        "PdfRevision",
+        {
+            "reply": "Done.",
+            "edits": [
+                {"block_id": block_id, "text": text, "substitutions": [], "defensible": True}
+            ],
+            "layout": [{"setting": "font_size", "value": font}] if font else [],
+            "justify": "unchanged",
+        },
+    )
 
 
 def test_a_correction_edits_the_pdf_and_can_be_undone(client, fake, job):
@@ -392,6 +437,7 @@ def test_a_correction_needs_a_message(client, job):
 
 # -- outreach ---------------------------------------------------------------
 
+
 def test_outreach_quotes_what_the_exported_pdf_will_say(client, fake, resume, transformed):
     job = transformed
     patch_rewrite(client, job, "bul005", status="accepted")
@@ -401,10 +447,10 @@ def test_outreach_quotes_what_the_exported_pdf_will_say(client, fake, resume, tr
     assert draft["recruiter"] == "Sam" and draft["linkedin"].startswith("Hi Sam")
     assert draft["meta"]["linkedin_limit"] == 300
     sent = fake.calls_for("Outreach")[0].user
-    assert tailored(text_of(resume, "bul005")) in sent       # accepted: tailored wording
+    assert tailored(text_of(resume, "bul005")) in sent  # accepted: tailored wording
     assert text_of(resume, "bul005") not in sent
-    assert text_of(resume, "bul009") in sent                 # mapped, not accepted
-    assert text_of(resume, "bul013") not in sent             # neither
+    assert text_of(resume, "bul009") in sent  # mapped, not accepted
+    assert text_of(resume, "bul013") not in sent  # neither
 
 
 def test_outreach_before_any_mapping_uses_the_resumes_own_points(client, fake, resume, job):
@@ -435,28 +481,36 @@ def test_liked_messages_are_kept_and_sent_as_style_references(client, fake, job)
     assert client.delete(f"/api/outreach-examples/{example['id']}").status_code == 404
 
 
-@pytest.mark.parametrize("payload, status", [
-    ({"kind": "tweet", "body": "A long enough message body to pass the length check."}, 422),
-    ({"kind": "email", "body": "Too short."}, 400),
-    ({"kind": "email", "body": "x" * 4001}, 400),
-])
+@pytest.mark.parametrize(
+    "payload, status",
+    [
+        ({"kind": "tweet", "body": "A long enough message body to pass the length check."}, 422),
+        ({"kind": "email", "body": "Too short."}, 400),
+        ({"kind": "email", "body": "x" * 4001}, 400),
+    ],
+)
 def test_outreach_examples_are_validated(client, payload, status):
     assert client.post("/api/outreach-examples", json=payload).status_code == status
 
 
 # -- experiences ------------------------------------------------------------
 
-@pytest.mark.parametrize("payload, status", [
-    ({"kind": "hobby", "text": "Ran a marathon in under four hours."}, 422),
-    ({"kind": "project", "text": "Too short."}, 400),
-])
+
+@pytest.mark.parametrize(
+    "payload, status",
+    [
+        ({"kind": "hobby", "text": "Ran a marathon in under four hours."}, 422),
+        ({"kind": "project", "text": "Too short."}, 400),
+    ],
+)
 def test_experiences_are_validated(client, payload, status):
     assert client.post("/api/experiences", json=payload).status_code == status
 
 
 def test_deleting_an_experience_unpicks_it_in_every_job(client, resume, job):
-    other = client.post("/api/jobs", json={"resume_id": resume["id"],
-                                           "text": JOB_DESCRIPTION}).json()
+    other = client.post(
+        "/api/jobs", json={"resume_id": resume["id"], "text": JOB_DESCRIPTION}
+    ).json()
     exp = add_experience(client)
     map_box(client, job, exp["key"], "jd04")
     map_box(client, other, exp["key"], "jd01")
@@ -470,6 +524,7 @@ def test_deleting_an_experience_unpicks_it_in_every_job(client, resume, job):
 
 
 # -- settings, backends and prompts -----------------------------------------
+
 
 def test_status_reports_the_live_backend(client):
     status = client.get("/api/status").json()
@@ -488,8 +543,9 @@ def test_a_backend_is_tested_with_a_real_call_before_it_is_saved(client, fake, s
     assert store.settings.get("backend") == "claude_code"
 
 
-@pytest.mark.parametrize("payload", [{"backend": "gemini"},
-                                     {"backend": "api", "model": "two words"}])
+@pytest.mark.parametrize(
+    "payload", [{"backend": "gemini"}, {"backend": "api", "model": "two words"}]
+)
 def test_an_invalid_backend_choice_is_rejected(client, payload):
     assert client.post("/api/backends", json=payload).status_code == 400
 
@@ -508,18 +564,22 @@ def test_an_edited_prompt_is_what_transform_sends(client, fake, job):
     transform(client, job)
     assert fake.calls_for("Rewrite")[-1].system.startswith("CUSTOM REWRITE RULES")
 
-    default = next(p["default"] for p in client.get("/api/prompts").json()["prompts"]
-                   if p["key"] == "rewrite")
+    default = next(
+        p["default"] for p in client.get("/api/prompts").json()["prompts"] if p["key"] == "rewrite"
+    )
     assert client.put("/api/prompts/rewrite", json={"text": default}).json()["custom"] is False
     client.put("/api/prompts/rewrite", json={"text": "CUSTOM AGAIN"})
     assert client.delete("/api/prompts/rewrite").json()["custom"] is False
 
 
-@pytest.mark.parametrize("method, key, payload, status", [
-    ("put", "nonsense", {"text": "x"}, 404),
-    ("put", "rewrite", {"text": "x" * 20001}, 400),
-    ("delete", "nonsense", None, 404),
-])
+@pytest.mark.parametrize(
+    "method, key, payload, status",
+    [
+        ("put", "nonsense", {"text": "x"}, 404),
+        ("put", "rewrite", {"text": "x" * 20001}, 400),
+        ("delete", "nonsense", None, 404),
+    ],
+)
 def test_prompt_edits_are_validated(client, method, key, payload, status):
     call = getattr(client, method)
     r = call(f"/api/prompts/{key}", json=payload) if payload else call(f"/api/prompts/{key}")

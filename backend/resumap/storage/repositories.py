@@ -7,6 +7,7 @@ model or a plain dict, and a model is written as it was read: fields that
 were never set stay absent from the stored JSON. ``add`` returns the new
 entity as stored, read back through the same connection.
 """
+
 from __future__ import annotations
 
 import json
@@ -78,13 +79,21 @@ class ResumeRepository(Repository):
         r["doc"] = json.loads(r.pop("doc_json"))
         return Resume.model_validate(r)
 
-    def add(self, *, label: str, filename: str, stored_path: str, person: str,
-            doc: dict[str, Any] | BaseModel) -> Resume:
+    def add(
+        self,
+        *,
+        label: str,
+        filename: str,
+        stored_path: str,
+        person: str,
+        doc: dict[str, Any] | BaseModel,
+    ) -> Resume:
         with self._db.connect() as conn:
             cur = conn.execute(
                 "INSERT INTO resumes (label, filename, stored_path, person_name, doc_json,"
                 " created_at) VALUES (?,?,?,?,?,?)",
-                (label, filename, stored_path, person, _json(doc), time.time()))
+                (label, filename, stored_path, person, _json(doc), time.time()),
+            )
             return _created(self._fetch(conn, cur.lastrowid or 0))
 
     def all(self) -> list[ResumeSummary]:
@@ -92,7 +101,8 @@ class ResumeRepository(Repository):
             rows = conn.execute(
                 "SELECT id, label, filename, person_name, created_at,"
                 " (SELECT COUNT(*) FROM jobs WHERE jobs.resume_id = resumes.id) AS job_count"
-                " FROM resumes ORDER BY created_at DESC").fetchall()
+                " FROM resumes ORDER BY created_at DESC"
+            ).fetchall()
         return [ResumeSummary.model_validate(dict(r)) for r in rows]
 
     def get(self, resume_id: int) -> Resume | None:
@@ -114,13 +124,22 @@ class JobRepository(Repository):
         r["points"] = json.loads(r.pop("points_json"))
         return Job.model_validate(r)
 
-    def add(self, *, resume_id: int, company: str, role: str, raw: str,
-            points: list[Any], mode: RewriteMode) -> Job:
+    def add(
+        self,
+        *,
+        resume_id: int,
+        company: str,
+        role: str,
+        raw: str,
+        points: list[Any],
+        mode: RewriteMode,
+    ) -> Job:
         with self._db.connect() as conn:
             cur = conn.execute(
                 "INSERT INTO jobs (resume_id, company, role, raw_text, points_json, mode,"
                 " created_at) VALUES (?,?,?,?,?,?,?)",
-                (resume_id, company, role, raw, _json(points), mode, time.time()))
+                (resume_id, company, role, raw, _json(points), mode, time.time()),
+            )
             return _created(self._fetch(conn, cur.lastrowid or 0))
 
     def get(self, job_id: int) -> Job | None:
@@ -137,11 +156,18 @@ class JobRepository(Repository):
             rows = conn.execute(q + " ORDER BY created_at DESC", args).fetchall()
         return [JobSummary.model_validate(dict(r)) for r in rows]
 
-    def update(self, job_id: int, *, company: str | None = None, role: str | None = None,
-               mode: RewriteMode | None = None) -> None:
+    def update(
+        self,
+        job_id: int,
+        *,
+        company: str | None = None,
+        role: str | None = None,
+        mode: RewriteMode | None = None,
+    ) -> None:
         """Change the fields given; a None leaves that column as it is."""
-        sets = {k: v for k, v in (("company", company), ("role", role), ("mode", mode))
-                if v is not None}
+        sets = {
+            k: v for k, v in (("company", company), ("role", role), ("mode", mode)) if v is not None
+        }
         if not sets:
             return
         clause = ", ".join(f"{k}=?" for k in sets)
@@ -163,8 +189,9 @@ class MappingRepository(Repository):
 
     def for_job(self, job_id: int) -> dict[str, list[str]]:
         with self._db.connect() as conn:
-            rows = conn.execute("SELECT block_id, point_id FROM mappings WHERE job_id=?",
-                                (job_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT block_id, point_id FROM mappings WHERE job_id=?", (job_id,)
+            ).fetchall()
         out: dict[str, list[str]] = {}
         for r in rows:
             out.setdefault(r["block_id"], []).append(r["point_id"])
@@ -173,11 +200,11 @@ class MappingRepository(Repository):
     def map_box(self, job_id: int, block_id: str, point_ids: list[str]) -> None:
         """Replace the points `block_id` answers; an empty list unmaps it."""
         with self._db.connect() as conn:
-            conn.execute("DELETE FROM mappings WHERE job_id=? AND block_id=?",
-                         (job_id, block_id))
+            conn.execute("DELETE FROM mappings WHERE job_id=? AND block_id=?", (job_id, block_id))
             conn.executemany(
                 "INSERT OR IGNORE INTO mappings (job_id, block_id, point_id) VALUES (?,?,?)",
-                [(job_id, block_id, p) for p in point_ids])
+                [(job_id, block_id, p) for p in point_ids],
+            )
 
     def delete_key(self, key: str) -> int:
         """Unmap `key` in every job. Returns how many links went."""
@@ -186,18 +213,20 @@ class MappingRepository(Repository):
 
     def box_modes(self, job_id: int) -> dict[str, BoxMode]:
         with self._db.connect() as conn:
-            rows = conn.execute("SELECT block_id, mode FROM box_modes WHERE job_id=?",
-                                (job_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT block_id, mode FROM box_modes WHERE job_id=?", (job_id,)
+            ).fetchall()
         return {r["block_id"]: BoxMode(r["mode"]) for r in rows}
 
     def set_box_mode(self, job_id: int, block_id: str, mode: BoxMode) -> None:
         """Mark one box's mode; ``BoxMode.INHERIT`` puts it back on the job's."""
         with self._db.connect() as conn:
-            conn.execute("DELETE FROM box_modes WHERE job_id=? AND block_id=?",
-                         (job_id, block_id))
+            conn.execute("DELETE FROM box_modes WHERE job_id=? AND block_id=?", (job_id, block_id))
             if mode:
-                conn.execute("INSERT INTO box_modes (job_id, block_id, mode) VALUES (?,?,?)",
-                             (job_id, block_id, mode))
+                conn.execute(
+                    "INSERT INTO box_modes (job_id, block_id, mode) VALUES (?,?,?)",
+                    (job_id, block_id, mode),
+                )
 
 
 class RewriteRepository(Repository):
@@ -208,8 +237,9 @@ class RewriteRepository(Repository):
 
     def get(self, job_id: int, block_id: str) -> Rewrite | None:
         with self._db.connect() as conn:
-            r = conn.execute("SELECT * FROM rewrites WHERE job_id=? AND block_id=?",
-                             (job_id, block_id)).fetchone()
+            r = conn.execute(
+                "SELECT * FROM rewrites WHERE job_id=? AND block_id=?", (job_id, block_id)
+            ).fetchone()
         return self._model(r) if r is not None else None
 
     @staticmethod
@@ -218,8 +248,16 @@ class RewriteRepository(Repository):
         d["meta"] = json.loads(d.pop("meta_json") or "{}")
         return Rewrite.model_validate(d)
 
-    def save(self, job_id: int, block_id: str, *, original: str, rewritten: str,
-             status: RewriteStatus, meta: dict[str, Any] | BaseModel) -> None:
+    def save(
+        self,
+        job_id: int,
+        block_id: str,
+        *,
+        original: str,
+        rewritten: str,
+        status: RewriteStatus,
+        meta: dict[str, Any] | BaseModel,
+    ) -> None:
         """Insert, or update everything but `original`: a re-roll keeps the source text."""
         with self._db.connect() as conn:
             conn.execute(
@@ -228,18 +266,19 @@ class RewriteRepository(Repository):
                 " ON CONFLICT(job_id, block_id) DO UPDATE SET"
                 " rewritten=excluded.rewritten, status=excluded.status,"
                 " meta_json=excluded.meta_json, updated_at=excluded.updated_at",
-                (job_id, block_id, original, rewritten, status, _json(meta), time.time()))
+                (job_id, block_id, original, rewritten, status, _json(meta), time.time()),
+            )
 
     def set_status(self, job_id: int, block_id: str, status: RewriteStatus) -> None:
         with self._db.connect() as conn:
             conn.execute(
                 "UPDATE rewrites SET status=?, updated_at=? WHERE job_id=? AND block_id=?",
-                (status, time.time(), job_id, block_id))
+                (status, time.time(), job_id, block_id),
+            )
 
     def delete(self, job_id: int, block_id: str) -> None:
         with self._db.connect() as conn:
-            conn.execute("DELETE FROM rewrites WHERE job_id=? AND block_id=?",
-                         (job_id, block_id))
+            conn.execute("DELETE FROM rewrites WHERE job_id=? AND block_id=?", (job_id, block_id))
 
     def delete_key(self, key: str) -> int:
         """Delete every job's rewrite filed under `key`. Returns how many went."""
@@ -250,15 +289,23 @@ class RewriteRepository(Repository):
 class OutreachRepository(Repository):
     def get(self, job_id: int) -> OutreachDraft | None:
         with self._db.connect() as conn:
-            r = _row(conn.execute("SELECT * FROM outreach WHERE job_id=?",
-                                  (job_id,)).fetchone())
+            r = _row(conn.execute("SELECT * FROM outreach WHERE job_id=?", (job_id,)).fetchone())
         if r is None:
             return None
         r["meta"] = json.loads(r.pop("meta_json") or "{}")
         return OutreachDraft.model_validate(r)
 
-    def save(self, job_id: int, *, recruiter: str, linkedin: str, linkedin_subject: str,
-             email_subject: str, email_body: str, meta: dict[str, Any] | BaseModel) -> None:
+    def save(
+        self,
+        job_id: int,
+        *,
+        recruiter: str,
+        linkedin: str,
+        linkedin_subject: str,
+        email_subject: str,
+        email_body: str,
+        meta: dict[str, Any] | BaseModel,
+    ) -> None:
         with self._db.connect() as conn:
             conn.execute(
                 "INSERT INTO outreach (job_id, recruiter, linkedin, linkedin_subject,"
@@ -268,8 +315,17 @@ class OutreachRepository(Repository):
                 " linkedin_subject=excluded.linkedin_subject,"
                 " email_subject=excluded.email_subject, email_body=excluded.email_body,"
                 " meta_json=excluded.meta_json, updated_at=excluded.updated_at",
-                (job_id, recruiter, linkedin, linkedin_subject, email_subject, email_body,
-                 _json(meta), time.time()))
+                (
+                    job_id,
+                    recruiter,
+                    linkedin,
+                    linkedin_subject,
+                    email_subject,
+                    email_body,
+                    _json(meta),
+                    time.time(),
+                ),
+            )
 
 
 class OutreachExampleRepository(Repository):
@@ -278,8 +334,9 @@ class OutreachExampleRepository(Repository):
     def all(self) -> list[OutreachExample]:
         """Newest first, so a prompt that keeps only the first few keeps the latest."""
         with self._db.connect() as conn:
-            rows = conn.execute("SELECT * FROM outreach_examples"
-                                " ORDER BY created_at DESC, id DESC").fetchall()
+            rows = conn.execute(
+                "SELECT * FROM outreach_examples ORDER BY created_at DESC, id DESC"
+            ).fetchall()
         return [OutreachExample.model_validate(dict(r)) for r in rows]
 
     @staticmethod
@@ -293,14 +350,17 @@ class OutreachExampleRepository(Repository):
 
     def add(self, *, kind: OutreachKind, subject: str, body: str) -> OutreachExample:
         with self._db.connect() as conn:
-            cur = conn.execute("INSERT INTO outreach_examples (kind, subject, body, created_at)"
-                               " VALUES (?,?,?,?)", (kind, subject, body, time.time()))
+            cur = conn.execute(
+                "INSERT INTO outreach_examples (kind, subject, body, created_at) VALUES (?,?,?,?)",
+                (kind, subject, body, time.time()),
+            )
             return _created(self._fetch(conn, cur.lastrowid or 0))
 
     def delete(self, example_id: int) -> bool:
         with self._db.connect() as conn:
-            return conn.execute("DELETE FROM outreach_examples WHERE id=?",
-                                (example_id,)).rowcount > 0
+            return (
+                conn.execute("DELETE FROM outreach_examples WHERE id=?", (example_id,)).rowcount > 0
+            )
 
 
 class ExperienceRepository(Repository):
@@ -325,8 +385,10 @@ class ExperienceRepository(Repository):
 
     def add(self, *, kind: ExperienceKind, title: str, text: str) -> Experience:
         with self._db.connect() as conn:
-            cur = conn.execute("INSERT INTO experiences (kind, title, text, created_at)"
-                               " VALUES (?,?,?,?)", (kind, title, text, time.time()))
+            cur = conn.execute(
+                "INSERT INTO experiences (kind, title, text, created_at) VALUES (?,?,?,?)",
+                (kind, title, text, time.time()),
+            )
             return _created(self._fetch(conn, cur.lastrowid or 0))
 
     def delete(self, experience_id: int) -> None:
@@ -340,8 +402,7 @@ class LayoutRepository(Repository):
 
     def get(self, job_id: int) -> dict[str, Any]:
         with self._db.connect() as conn:
-            r = conn.execute("SELECT layout_json FROM layouts WHERE job_id=?",
-                             (job_id,)).fetchone()
+            r = conn.execute("SELECT layout_json FROM layouts WHERE job_id=?", (job_id,)).fetchone()
         return json.loads(r["layout_json"]) if r else {}
 
     def set(self, job_id: int, layout: dict[str, Any]) -> None:
@@ -350,7 +411,8 @@ class LayoutRepository(Repository):
                 "INSERT INTO layouts (job_id, layout_json, updated_at) VALUES (?,?,?)"
                 " ON CONFLICT(job_id) DO UPDATE SET"
                 " layout_json=excluded.layout_json, updated_at=excluded.updated_at",
-                (job_id, _json(layout), time.time()))
+                (job_id, _json(layout), time.time()),
+            )
 
 
 class ChatRepository(Repository):
@@ -358,8 +420,9 @@ class ChatRepository(Repository):
 
     def for_job(self, job_id: int) -> list[ChatMessage]:
         with self._db.connect() as conn:
-            rows = conn.execute("SELECT * FROM chat WHERE job_id=? ORDER BY id",
-                                (job_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM chat WHERE job_id=? ORDER BY id", (job_id,)
+            ).fetchall()
         out = []
         for r in rows:
             d = dict(r)
@@ -369,9 +432,10 @@ class ChatRepository(Repository):
 
     def add(self, job_id: int, role: ChatRole, text: str, meta: dict[str, Any]) -> int:
         with self._db.connect() as conn:
-            cur = conn.execute("INSERT INTO chat (job_id, role, text, meta_json, created_at)"
-                               " VALUES (?,?,?,?,?)", (job_id, role, text, _json(meta),
-                                                        time.time()))
+            cur = conn.execute(
+                "INSERT INTO chat (job_id, role, text, meta_json, created_at) VALUES (?,?,?,?,?)",
+                (job_id, role, text, _json(meta), time.time()),
+            )
             return int(cur.lastrowid or 0)
 
     def set_meta(self, message_id: int, meta: dict[str, Any]) -> None:
@@ -389,8 +453,11 @@ class SettingsRepository(Repository):
 
     def set(self, key: str, value: str) -> None:
         with self._db.connect() as conn:
-            conn.execute("INSERT INTO settings (key, value) VALUES (?,?)"
-                         " ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?,?)"
+                " ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
 
     def delete(self, key: str) -> None:
         with self._db.connect() as conn:
@@ -400,5 +467,4 @@ class SettingsRepository(Repository):
         """{rest_of_key: value} for every setting whose key starts with `prefix`."""
         with self._db.connect() as conn:
             rows = conn.execute("SELECT key, value FROM settings").fetchall()
-        return {r["key"][len(prefix):]: r["value"] for r in rows
-                if r["key"].startswith(prefix)}
+        return {r["key"][len(prefix) :]: r["value"] for r in rows if r["key"].startswith(prefix)}

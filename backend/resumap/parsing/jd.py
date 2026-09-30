@@ -5,6 +5,7 @@ JD point *says* -- the model is allowed to label the points it produces, never
 to reword them, so the text on screen is byte for byte what was pasted and the
 point count matches the requirements in the posting.
 """
+
 from __future__ import annotations
 
 import re
@@ -171,8 +172,13 @@ def parse_jd_verbatim(text: str) -> dict:
         "company": guess_company(text),
         "role": guess_role(text),
         "points": [
-            {"id": f"jd{i+1:02d}", "text": p, "category": "requirement",
-             "keywords": [], "dropped": False}
+            {
+                "id": f"jd{i + 1:02d}",
+                "text": p,
+                "category": "requirement",
+                "keywords": [],
+                "dropped": False,
+            }
             for i, p in enumerate(pts)
         ],
     }

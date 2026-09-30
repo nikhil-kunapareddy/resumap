@@ -1,4 +1,5 @@
 """Uploading, parsing and storing resumes, and the experience library beside them."""
+
 from __future__ import annotations
 
 import re
@@ -24,8 +25,12 @@ def resume_out(resume: Resume) -> ResumeOut:
     """A stored resume for the browser, without the geometry only the renderer reads."""
     doc = resume.doc
     return ResumeOut(
-        id=resume.id, label=resume.label, filename=resume.filename,
-        diagnostics=doc.diagnostics, name=doc.name, sections=doc.sections,
+        id=resume.id,
+        label=resume.label,
+        filename=resume.filename,
+        diagnostics=doc.diagnostics,
+        name=doc.name,
+        sections=doc.sections,
         blocks=[Block.model_validate(b.model_dump(exclude={"line"})) for b in doc.blocks],
     )
 
@@ -52,8 +57,7 @@ class ResumeService(Service):
         with stored.open("wb") as out:
             shutil.copyfileobj(content, out)
 
-        obs.event("upload.received", filename_ext=ext,
-                  bytes=stored.stat().st_size)
+        obs.event("upload.received", filename_ext=ext, bytes=stored.stat().st_size)
         try:
             with obs.timer() as t:
                 doc = parse_resume(str(stored))
@@ -76,9 +80,12 @@ class ResumeService(Service):
             doc=doc,
         )
         written = write_parse_report(self.paths.logs, resume.id, resume_label, doc)
-        obs.event("resume.stored", resume_id=resume.id,
-                  points=sum(1 for b in doc["blocks"] if b["mappable"]),
-                  report=str(written.name) if written else None)
+        obs.event(
+            "resume.stored",
+            resume_id=resume.id,
+            points=sum(1 for b in doc["blocks"] if b["mappable"]),
+            report=str(written.name) if written else None,
+        )
         return resume_out(resume)
 
     def delete(self, resume_id: int) -> Ok:
@@ -102,11 +109,18 @@ class ExperienceService(Service):
     def add(self, kind: ExperienceKind, title: str, text: str) -> Experience:
         text = text.strip()
         if len(text) < 15:
-            raise Invalid("Describe the experience in at least a sentence: "
-                          "what you did, with what, and what came of it.")
+            raise Invalid(
+                "Describe the experience in at least a sentence: "
+                "what you did, with what, and what came of it."
+            )
         exp = self.store.experiences.add(kind=kind, title=title.strip()[:80], text=text)
-        obs.event("experience.added", id=exp.id, kind=kind,
-                  has_title=bool(title.strip()), **obs.tmeta(text, "exp"))
+        obs.event(
+            "experience.added",
+            id=exp.id,
+            kind=kind,
+            has_title=bool(title.strip()),
+            **obs.tmeta(text, "exp"),
+        )
         return exp
 
     def delete(self, experience_id: int) -> ExperienceDeleted:

@@ -1,4 +1,5 @@
 """Jobs: the pasted posting, its points, and the Map step."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

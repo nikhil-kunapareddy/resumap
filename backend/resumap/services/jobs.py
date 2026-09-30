@@ -1,4 +1,5 @@
 """Jobs: a pasted posting, its verbatim points, and which boxes answer which point."""
+
 from __future__ import annotations
 
 from .. import obs
@@ -68,8 +69,14 @@ class JobService(Service):
             resume=resume_out(resume) if resume else None,
         )
 
-    def update(self, job_id: int, *, company: str | None = None, role: str | None = None,
-               mode: RewriteMode | None = None) -> JobSummary:
+    def update(
+        self,
+        job_id: int,
+        *,
+        company: str | None = None,
+        role: str | None = None,
+        mode: RewriteMode | None = None,
+    ) -> JobSummary:
         """Change a job's company, role or mode; returns the job as it now stands."""
         self._job(job_id)
         self.store.jobs.update(job_id, company=company, role=role, mode=mode)
@@ -107,8 +114,9 @@ class JobService(Service):
                 if len(left) != len(ids):
                     self.store.mappings.map_box(job_id, block_id, left)
                     unwired += len(ids) - len(left)
-        obs.event("jd.points_kept", job_id=job_id, kept=len(keep),
-                  dropped=len(gone), unwired=unwired)
+        obs.event(
+            "jd.points_kept", job_id=job_id, kept=len(keep), dropped=len(gone), unwired=unwired
+        )
         return PointsKept(points=points, dropped=sorted(gone), unwired=unwired)
 
     def map_box(self, job_id: int, block_id: str, point_ids: list[str]) -> MappingSaved:
@@ -120,9 +128,14 @@ class JobService(Service):
             raise Invalid(f"Unknown JD point(s): {', '.join(unknown)}")
         before = self.store.mappings.for_job(job_id).get(block_id, [])
         self.store.mappings.map_box(job_id, block_id, point_ids)
-        obs.event("map.set", job_id=job_id, block=block_id,
-                  points=point_ids, added=len(set(point_ids) - set(before)),
-                  removed=len(set(before) - set(point_ids)))
+        obs.event(
+            "map.set",
+            job_id=job_id,
+            block=block_id,
+            points=point_ids,
+            added=len(set(point_ids) - set(before)),
+            removed=len(set(before) - set(point_ids)),
+        )
         return MappingSaved(block_id=block_id, point_ids=point_ids)
 
     def set_box_mode(self, job_id: int, block_id: str, mode: BoxMode) -> BoxModeSaved:

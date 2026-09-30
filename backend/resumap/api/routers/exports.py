@@ -1,4 +1,5 @@
 """The rendered PDF: preview, export, fit and download."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -12,8 +13,11 @@ router = APIRouter(prefix="/api", tags=["export"])
 
 @router.get("/jobs/{job_id}/preview.pdf")
 def preview(job_id: int, services: ServicesDep) -> FileResponse:
-    return FileResponse(services.exports.preview(job_id), media_type="application/pdf",
-                        headers={"Cache-Control": "no-store"})
+    return FileResponse(
+        services.exports.preview(job_id),
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post("/jobs/{job_id}/export")

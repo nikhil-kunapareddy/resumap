@@ -4,6 +4,7 @@ Documents (a parsed resume, a job's points, a rewrite's meta) are stored as
 JSON blobs; the tables are just enough relational structure to hang the
 many-to-many mappings off.
 """
+
 from __future__ import annotations
 
 import sqlite3

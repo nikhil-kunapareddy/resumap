@@ -3,6 +3,7 @@
 Services know nothing about HTTP. They raise one of these with the sentence to
 show, and the API layer decides the status code (``api/errors.py``).
 """
+
 from __future__ import annotations
 
 

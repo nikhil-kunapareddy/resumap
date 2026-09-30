@@ -368,6 +368,7 @@ It runs on every export and warns rather than silently passing.
 ```bash
 uv sync --extra dev
 uv run pytest                # tests
+uv run ruff format           # format
 uv run ruff check            # lint
 uv run mypy                  # types
 ```

@@ -5,6 +5,7 @@ and a registry whose every backend name leads to one scripted fake. The
 environment is still set before anything imports ``app.config``, so nothing
 can fall back to the real ``data/`` directory or a developer's ``.env``.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,18 +13,20 @@ import tempfile
 from pathlib import Path
 
 _SESSION = Path(tempfile.mkdtemp(prefix="resumap-tests-"))
-os.environ.update({
-    "RESUMAP_DATA_DIR": str(_SESSION / "data"),
-    "RESUMAP_LOG_DIR": str(_SESSION / "logs"),
-    "RESUMAP_BACKEND": "api",
-    "RESUMAP_MODEL": "fake-model",
-    "RESUMAP_FIRST_NAME": "resume",
-    "RESUMAP_LOG_LEVEL": "WARNING",
-    "RESUMAP_LOG_PROMPTS": "0",
-    "RESUMAP_LOG_TEXT": "0",
-    # Set, so load_dotenv leaves it alone: no test can reach a billed API.
-    "ANTHROPIC_API_KEY": "",
-})
+os.environ.update(
+    {
+        "RESUMAP_DATA_DIR": str(_SESSION / "data"),
+        "RESUMAP_LOG_DIR": str(_SESSION / "logs"),
+        "RESUMAP_BACKEND": "api",
+        "RESUMAP_MODEL": "fake-model",
+        "RESUMAP_FIRST_NAME": "resume",
+        "RESUMAP_LOG_LEVEL": "WARNING",
+        "RESUMAP_LOG_PROMPTS": "0",
+        "RESUMAP_LOG_TEXT": "0",
+        # Set, so load_dotenv leaves it alone: no test can reach a billed API.
+        "ANTHROPIC_API_KEY": "",
+    }
+)
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -50,8 +53,12 @@ def resume_files(tmp_path_factory) -> dict[str, Path]:
 @pytest.fixture
 def paths(tmp_path) -> Paths:
     """A fresh folder of the test's own for the database, uploads, exports and logs."""
-    p = Paths(db=tmp_path / "resumap.db", uploads=tmp_path / "upload",
-              exports=tmp_path / "export", logs=tmp_path / "logs")
+    p = Paths(
+        db=tmp_path / "resumap.db",
+        uploads=tmp_path / "upload",
+        exports=tmp_path / "export",
+        logs=tmp_path / "logs",
+    )
     p.ensure()
     return p
 
@@ -83,8 +90,7 @@ def client(paths, registry):
 
 def upload(client, path: Path, label: str = "Jane") -> dict:
     with path.open("rb") as fh:
-        r = client.post("/api/resumes", files={"file": (path.name, fh)},
-                        data={"label": label})
+        r = client.post("/api/resumes", files={"file": (path.name, fh)}, data={"label": label})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -98,7 +104,6 @@ def resume(client, resume_files) -> dict:
 @pytest.fixture
 def job(client, resume) -> dict:
     """A job for the sample posting against the uploaded resume."""
-    r = client.post("/api/jobs", json={"resume_id": resume["id"],
-                                       "text": resumes.JOB_DESCRIPTION})
+    r = client.post("/api/jobs", json={"resume_id": resume["id"], "text": resumes.JOB_DESCRIPTION})
     assert r.status_code == 200, r.text
     return r.json()

@@ -22,6 +22,7 @@ These are what CI runs, on Python 3.10 to 3.13:
 
 ```bash
 uv run pytest                # the whole suite, a few seconds
+uv run ruff format           # format (CI runs `ruff format --check`)
 uv run ruff check            # lint
 uv run mypy                  # types
 ```
@@ -76,7 +77,7 @@ until you remove its marker, which is the point: the fix gets noticed.
 
 * One change per PR, with the reason in the description.
 * Add or update a test for any behaviour you change.
-* Keep CI green: tests, ruff and mypy.
+* Keep CI green: tests, `ruff format`, `ruff check` and mypy.
 
 By contributing you agree that your work is released under the
 [MIT License](LICENSE).

@@ -1,4 +1,5 @@
 """Recruiter outreach: the LinkedIn note and follow-up email, and liked examples."""
+
 from __future__ import annotations
 
 from .. import obs
@@ -58,8 +59,11 @@ class OutreachService(Service):
             raise Unavailable(why)
 
         rewrites = self.store.rewrites.for_job(job_id)
-        quoted = highlights(render_doc(resume.doc.as_dict(), rewrites), rewrites,
-                            self.store.mappings.for_job(job_id))
+        quoted = highlights(
+            render_doc(resume.doc.as_dict(), rewrites),
+            rewrites,
+            self.store.mappings.for_job(job_id),
+        )
         if not quoted:
             raise Invalid("No resume points to write from. Map and transform some boxes first.")
 
@@ -79,19 +83,29 @@ class OutreachService(Service):
         except Exception as exc:  # noqa: BLE001 - the draft is optional, say why it failed
             obs.record_failure("outreach", exc, 0.0, job_id=job_id)
             raise UpstreamFailed(
-                f"Could not draft the outreach: {type(exc).__name__}: {exc}") from exc
+                f"Could not draft the outreach: {type(exc).__name__}: {exc}"
+            ) from exc
 
         meta = {
             "highlights_used": draft["highlights_used"],
             "linkedin_limit": LINKEDIN_LIMIT,
         }
-        self.store.outreach.save(job_id, recruiter=recruiter.strip(), linkedin=draft["linkedin"],
-                                 linkedin_subject=draft["linkedin_subject"],
-                                 email_subject=draft["email_subject"],
-                                 email_body=draft["email_body"], meta=meta)
-        obs.event("outreach.done", job_id=job_id, highlights=len(quoted),
-                  linkedin_chars=len(draft["linkedin"]),
-                  over_limit=len(draft["linkedin"]) > LINKEDIN_LIMIT)
+        self.store.outreach.save(
+            job_id,
+            recruiter=recruiter.strip(),
+            linkedin=draft["linkedin"],
+            linkedin_subject=draft["linkedin_subject"],
+            email_subject=draft["email_subject"],
+            email_body=draft["email_body"],
+            meta=meta,
+        )
+        obs.event(
+            "outreach.done",
+            job_id=job_id,
+            highlights=len(quoted),
+            linkedin_chars=len(draft["linkedin"]),
+            over_limit=len(draft["linkedin"]) > LINKEDIN_LIMIT,
+        )
         return OutreachOut(outreach=self.store.outreach.get(job_id))
 
     def edit(self, job_id: int, fields: dict[str, str]) -> OutreachOut:
@@ -100,11 +114,15 @@ class OutreachService(Service):
         if existing is None:
             raise NotFound("Nothing drafted for this job yet.")
         merged = existing.model_copy(update=fields)
-        self.store.outreach.save(job_id, recruiter=merged.recruiter,
-                                 linkedin=merged.linkedin.strip(),
-                                 linkedin_subject=merged.linkedin_subject.strip(),
-                                 email_subject=merged.email_subject.strip(),
-                                 email_body=merged.email_body.strip(), meta=existing.meta)
+        self.store.outreach.save(
+            job_id,
+            recruiter=merged.recruiter,
+            linkedin=merged.linkedin.strip(),
+            linkedin_subject=merged.linkedin_subject.strip(),
+            email_subject=merged.email_subject.strip(),
+            email_body=merged.email_body.strip(),
+            meta=existing.meta,
+        )
         obs.event("outreach.edited", job_id=job_id, fields=sorted(fields))
         return OutreachOut(outreach=self.store.outreach.get(job_id))
 
@@ -118,11 +136,18 @@ class OutreachService(Service):
         if len(text) < 20:
             raise Invalid("Paste the whole message you liked, not just a line of it.")
         if len(text) > EXAMPLE_MAX_CHARS:
-            raise Invalid(f"That example is {len(text)} characters. Keep it under "
-                          f"{EXAMPLE_MAX_CHARS}: one message, not a thread.")
+            raise Invalid(
+                f"That example is {len(text)} characters. Keep it under "
+                f"{EXAMPLE_MAX_CHARS}: one message, not a thread."
+            )
         example = self.store.examples.add(kind=kind, subject=subject.strip()[:200], body=text)
-        obs.event("outreach_example.added", id=example.id, kind=kind,
-                  has_subject=bool(subject.strip()), **obs.tmeta(text, "ex"))
+        obs.event(
+            "outreach_example.added",
+            id=example.id,
+            kind=kind,
+            has_subject=bool(subject.strip()),
+            **obs.tmeta(text, "ex"),
+        )
         return example
 
     def delete_example(self, example_id: int) -> Ok:

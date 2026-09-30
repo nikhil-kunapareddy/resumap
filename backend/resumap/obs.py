@@ -13,6 +13,7 @@ different privacy profiles:
 Set ``RESUMAP_LOG_TEXT=1`` to also include truncated text samples in the JSONL
 while debugging locally.
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -56,6 +57,7 @@ URL_RE = re.compile(r"https?://\S+|www\.\S+")
 # configuration
 # --------------------------------------------------------------------------
 
+
 def _log_text_enabled() -> bool:
     return os.getenv("RESUMAP_LOG_TEXT", "0").strip() not in ("", "0", "false", "no")
 
@@ -67,8 +69,9 @@ def _prompts_enabled() -> bool:
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         out: dict[str, Any] = {
-            "ts": datetime.fromtimestamp(record.created, timezone.utc)
-            .isoformat(timespec="milliseconds"),
+            "ts": datetime.fromtimestamp(record.created, timezone.utc).isoformat(
+                timespec="milliseconds"
+            ),
             "lvl": record.levelname,
             "ev": getattr(record, "ev", "log"),
             "run": getattr(record, "run_id", "-"),
@@ -82,8 +85,13 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(out, default=str, ensure_ascii=False)
 
 
-_LEVEL_TAG = {"DEBUG": "DBG ", "INFO": "INFO", "WARNING": "WARN",
-              "ERROR": "ERR ", "CRITICAL": "CRIT"}
+_LEVEL_TAG = {
+    "DEBUG": "DBG ",
+    "INFO": "INFO",
+    "WARNING": "WARN",
+    "ERROR": "ERR ",
+    "CRITICAL": "CRIT",
+}
 
 
 class ConsoleFormatter(logging.Formatter):
@@ -127,7 +135,9 @@ def setup(log_dir: Path, level: str = "INFO") -> None:
     _log.propagate = False
 
     jsonl = RotatingFileHandler(
-        log_dir / "resumap.jsonl", maxBytes=8_000_000, backupCount=5,
+        log_dir / "resumap.jsonl",
+        maxBytes=8_000_000,
+        backupCount=5,
         encoding="utf-8",
     )
     jsonl.setFormatter(JsonFormatter())
@@ -143,14 +153,19 @@ def setup(log_dir: Path, level: str = "INFO") -> None:
 # emitting events
 # --------------------------------------------------------------------------
 
+
 def event(ev: str, level: int = logging.INFO, **fields: Any) -> None:
     """Emit one structured event. Never raises -- logging must not break a request."""
     try:
-        _log.log(level, ev, extra={
-            "ev": ev,
-            "run_id": run_id_var.get(),
-            "fields": {k: v for k, v in fields.items() if v is not None},
-        })
+        _log.log(
+            level,
+            ev,
+            extra={
+                "ev": ev,
+                "run_id": run_id_var.get(),
+                "fields": {k: v for k, v in fields.items() if v is not None},
+            },
+        )
     except Exception:  # noqa: BLE001 - a broken log line is not worth a 500
         pass
 
@@ -161,10 +176,15 @@ def warn(ev: str, **fields: Any) -> None:
 
 def error(ev: str, exc: BaseException | None = None, **fields: Any) -> None:
     try:
-        _log.error(ev, exc_info=exc, extra={
-            "ev": ev, "run_id": run_id_var.get(),
-            "fields": {k: v for k, v in fields.items() if v is not None},
-        })
+        _log.error(
+            ev,
+            exc_info=exc,
+            extra={
+                "ev": ev,
+                "run_id": run_id_var.get(),
+                "fields": {k: v for k, v in fields.items() if v is not None},
+            },
+        )
     except Exception:  # noqa: BLE001
         pass
 
@@ -194,6 +214,7 @@ class timer:
 # metadata-only text description
 # --------------------------------------------------------------------------
 
+
 def tmeta(text: str | None, prefix: str = "text") -> dict[str, Any]:
     """Describe text without reproducing it.
 
@@ -221,7 +242,7 @@ def path_str(path: Any) -> str:
         text = str(path)
         home = str(Path.home())
         if text.startswith(home):
-            text = "~" + text[len(home):]
+            text = "~" + text[len(home) :]
         # The account name can also appear mid-path (a temp dir named after the
         # project location, a mounted volume), so mask it wherever it occurs.
         user = getpass.getuser()
@@ -242,6 +263,7 @@ def scrub(text: str) -> str:
 # --------------------------------------------------------------------------
 # cost accounting
 # --------------------------------------------------------------------------
+
 
 class _Totals:
     def __init__(self) -> None:
@@ -272,8 +294,9 @@ def price(model: str, input_tokens: int, output_tokens: int) -> float:
     return input_tokens * rin + output_tokens * rout
 
 
-def record_usage(op: str, model: str, usage: Any, ms: float,
-                 request_id: str | None = None, **extra: Any) -> dict[str, Any]:
+def record_usage(
+    op: str, model: str, usage: Any, ms: float, request_id: str | None = None, **extra: Any
+) -> dict[str, Any]:
     """Log one API call's tokens, cost and latency; update running totals."""
     tin = int(getattr(usage, "input_tokens", 0) or 0)
     tout = int(getattr(usage, "output_tokens", 0) or 0)
@@ -286,8 +309,7 @@ def record_usage(op: str, model: str, usage: Any, ms: float,
         _totals.output_tokens += tout
         _totals.cached_tokens += cached
         _totals.cost += cost
-        slot = _totals.by_op.setdefault(op, {"calls": 0, "cost": 0.0,
-                                             "in": 0, "out": 0})
+        slot = _totals.by_op.setdefault(op, {"calls": 0, "cost": 0.0, "in": 0, "out": 0})
         slot["calls"] += 1
         slot["cost"] += cost
         slot["in"] += tin
@@ -295,20 +317,44 @@ def record_usage(op: str, model: str, usage: Any, ms: float,
         running = _totals.cost
         ncalls = _totals.calls
 
-    event("api.call", op=op, model=model, input_tokens=tin, output_tokens=tout,
-          cached_tokens=cached, cost_usd=round(cost, 5), ms=ms,
-          request_id=request_id, session_calls=ncalls,
-          session_cost_usd=round(running, 4), **extra)
-    return {"input_tokens": tin, "output_tokens": tout, "cost_usd": cost,
-            "ms": ms, "request_id": request_id}
+    event(
+        "api.call",
+        op=op,
+        model=model,
+        input_tokens=tin,
+        output_tokens=tout,
+        cached_tokens=cached,
+        cost_usd=round(cost, 5),
+        ms=ms,
+        request_id=request_id,
+        session_calls=ncalls,
+        session_cost_usd=round(running, 4),
+        **extra,
+    )
+    return {
+        "input_tokens": tin,
+        "output_tokens": tout,
+        "cost_usd": cost,
+        "ms": ms,
+        "request_id": request_id,
+    }
 
 
-def record_failure(op: str, exc: BaseException, ms: float,
-                   request_id: str | None = None, **extra: Any) -> None:
+def record_failure(
+    op: str, exc: BaseException, ms: float, request_id: str | None = None, **extra: Any
+) -> None:
     with _totals.lock:
         _totals.failures += 1
-    error("api.failed", exc=exc, op=op, error=type(exc).__name__,
-          detail=str(exc)[:300], ms=ms, request_id=request_id, **extra)
+    error(
+        "api.failed",
+        exc=exc,
+        op=op,
+        error=type(exc).__name__,
+        detail=str(exc)[:300],
+        ms=ms,
+        request_id=request_id,
+        **extra,
+    )
 
 
 def totals() -> dict[str, Any]:
@@ -320,14 +366,14 @@ def totals() -> dict[str, Any]:
             "output_tokens": _totals.output_tokens,
             "cached_tokens": _totals.cached_tokens,
             "cost_usd": round(_totals.cost, 4),
-            "by_op": {k: {**v, "cost": round(v["cost"], 4)}
-                      for k, v in _totals.by_op.items()},
+            "by_op": {k: {**v, "cost": round(v["cost"], 4)} for k, v in _totals.by_op.items()},
         }
 
 
 # --------------------------------------------------------------------------
 # prompt archive (contains resume/JD text by nature -- kept separate)
 # --------------------------------------------------------------------------
+
 
 def _archive_dir(log_dir: Path) -> Path:
     d = log_dir / "prompts"
@@ -345,8 +391,14 @@ def _prune(directory: Path, cap_mb: float) -> None:
         victim.unlink(missing_ok=True)
 
 
-def archive_prompt(log_dir: Path, op: str, system: str, user: str,
-                   response: str, meta: dict[str, Any] | None = None) -> str | None:
+def archive_prompt(
+    log_dir: Path,
+    op: str,
+    system: str,
+    user: str,
+    response: str,
+    meta: dict[str, Any] | None = None,
+) -> str | None:
     """Write one call's full prompt and completion. Returns the filename."""
     if not _prompts_enabled():
         return None
@@ -361,9 +413,23 @@ def archive_prompt(log_dir: Path, op: str, system: str, user: str,
         ]
         for k, v in (meta or {}).items():
             body.append(f"# {k}: {v}")
-        body += ["", "=" * 70, "SYSTEM", "=" * 70, system or "",
-                 "", "=" * 70, "USER", "=" * 70, user or "",
-                 "", "=" * 70, "RESPONSE", "=" * 70, response or ""]
+        body += [
+            "",
+            "=" * 70,
+            "SYSTEM",
+            "=" * 70,
+            system or "",
+            "",
+            "=" * 70,
+            "USER",
+            "=" * 70,
+            user or "",
+            "",
+            "=" * 70,
+            "RESPONSE",
+            "=" * 70,
+            response or "",
+        ]
         path = directory / name
         path.write_text("\n".join(body), encoding="utf-8")
         _prune(directory, float(os.getenv("RESUMAP_PROMPT_ARCHIVE_MB", "64")))

@@ -6,6 +6,7 @@ content is laid out the way real resumes are: a centred name and contact line,
 ruled section headings, entries with a right-aligned date, and bullets long
 enough to wrap onto a second line.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,31 +16,52 @@ CONTACT = "jane.doe@example.com | (555) 010-0199 | linkedin.com/in/janedoe | Spr
 
 # (section, [(entry left, entry right, [bullets])]) in page order.
 SECTIONS: list[tuple[str, list[tuple[str, str, list[str]]]]] = [
-    ("EXPERIENCE", [
-        ("Senior Data Engineer, Northwind Analytics", "Jan 2021 - Present", [
-            "Built a streaming ingestion pipeline in Python and Kafka that processed 2 million "
-            "events per day at 99.9% uptime across three regions.",
-            "Reduced nightly batch runtime by 40% by rewriting Spark jobs and partitioning "
-            "Parquet tables by date.",
-            "Led a team of 4 engineers to migrate 120 Airflow DAGs from a legacy cluster to "
-            "managed cloud infrastructure without missing a delivery window.",
-        ]),
-        ("Data Engineer, Contoso Group", "Mar 2018 - Dec 2020", [
-            "Designed a dimensional data model in PostgreSQL that cut report query times from "
-            "30 seconds to under 3.",
-            "Automated data quality checks with Great Expectations, catching 95% of schema "
-            "drift before it reached dashboards.",
-        ]),
-    ]),
-    ("PROJECTS", [
-        ("Open Transit Dashboard", "2022", [
-            "Developed a public dashboard in React and FastAPI that shows real-time bus "
-            "arrivals to 30,000 monthly users.",
-        ]),
-    ]),
-    ("EDUCATION", [
-        ("Example University, B.S. Computer Science", "2014 - 2018", []),
-    ]),
+    (
+        "EXPERIENCE",
+        [
+            (
+                "Senior Data Engineer, Northwind Analytics",
+                "Jan 2021 - Present",
+                [
+                    "Built a streaming ingestion pipeline in Python and Kafka that processed "
+                    "2 million events per day at 99.9% uptime across three regions.",
+                    "Reduced nightly batch runtime by 40% by rewriting Spark jobs and partitioning "
+                    "Parquet tables by date.",
+                    "Led a team of 4 engineers to migrate 120 Airflow DAGs from a legacy cluster "
+                    "to managed cloud infrastructure without missing a delivery window.",
+                ],
+            ),
+            (
+                "Data Engineer, Contoso Group",
+                "Mar 2018 - Dec 2020",
+                [
+                    "Designed a dimensional data model in PostgreSQL that cut report query times "
+                    "from 30 seconds to under 3.",
+                    "Automated data quality checks with Great Expectations, catching 95% of schema "
+                    "drift before it reached dashboards.",
+                ],
+            ),
+        ],
+    ),
+    (
+        "PROJECTS",
+        [
+            (
+                "Open Transit Dashboard",
+                "2022",
+                [
+                    "Developed a public dashboard in React and FastAPI that shows real-time bus "
+                    "arrivals to 30,000 monthly users.",
+                ],
+            ),
+        ],
+    ),
+    (
+        "EDUCATION",
+        [
+            ("Example University, B.S. Computer Science", "2014 - 2018", []),
+        ],
+    ),
 ]
 SKILLS = [
     "Languages: Python, SQL, Scala, TypeScript",

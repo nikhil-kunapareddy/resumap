@@ -6,6 +6,7 @@ kept it from being a point. Block ids are the join key for mappings, rewrites
 and export overrides, so a change here is a change to stored data. When one is
 intended, regenerate with ``RESUMAP_UPDATE_GOLDEN=1 pytest`` and review the diff.
 """
+
 from __future__ import annotations
 
 import json
@@ -100,13 +101,15 @@ def test_pdf_source_geometry_is_recorded_for_the_renderer(parsed):
 # Pinned as strict xfails: each one passes the day the defect is fixed, which
 # fails the run until the marker is removed.
 
+
 @pytest.mark.xfail(strict=True, reason="a skills line with a label is read as a section heading")
 def test_a_labelled_skills_line_is_not_a_section(parsed):
     assert "Languages: Python, SQL, Scala, TypeScript" not in parsed["pdf"]["sections"]
 
 
-@pytest.mark.xfail(strict=True,
-                   reason="in TXT an entry line right after a bullet is merged into it")
+@pytest.mark.xfail(
+    strict=True, reason="in TXT an entry line right after a bullet is merged into it"
+)
 def test_txt_entry_after_a_bullet_stays_its_own_block(parsed):
     bullet = next(b for b in parsed["txt"]["blocks"] if b["text"].startswith("Led a team"))
     assert "Contoso Group" not in bullet["text"]

@@ -1,4 +1,5 @@
 """What every service starts from: the Store, and the lookups that 404."""
+
 from __future__ import annotations
 
 from typing import Any

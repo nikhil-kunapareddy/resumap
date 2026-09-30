@@ -19,6 +19,7 @@ A backend is a ``Backend`` subclass: ``name``, ``label``, ``concurrency``,
 ``default_model``, ``unavailable()`` and ``complete()``. Each takes its
 configuration in its constructor rather than reading it from the environment.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -35,9 +36,17 @@ from .registry import BackendRegistry, suggest_model
 NAMES = ("claude_code", "codex", "pi", "api")
 
 
-def default_registry(*, selected: str, model: str, api_key: Callable[[], str | None],
-                     claude_cli: str | None, codex_cli: str | None, pi_cli: str | None,
-                     dotenv_keys: Mapping[str, str], cwd: Path) -> BackendRegistry:
+def default_registry(
+    *,
+    selected: str,
+    model: str,
+    api_key: Callable[[], str | None],
+    claude_cli: str | None,
+    codex_cli: str | None,
+    pi_cli: str | None,
+    dotenv_keys: Mapping[str, str],
+    cwd: Path,
+) -> BackendRegistry:
     """The four real backends, with `selected` live until settings say otherwise."""
     backends: list[Backend] = [
         ClaudeCodeBackend(model, claude_cli, cwd),
@@ -48,6 +57,19 @@ def default_registry(*, selected: str, model: str, api_key: Callable[[], str | N
     return BackendRegistry({b.name: b for b in backends}, selected)
 
 
-__all__ = ["NAMES", "AnthropicApiBackend", "Backend", "BackendRegistry", "ClaudeCodeBackend",
-           "CodexBackend", "Completion", "Effort", "PiBackend", "Usage", "cli_env",
-           "default_registry", "run_cli", "suggest_model"]
+__all__ = [
+    "NAMES",
+    "AnthropicApiBackend",
+    "Backend",
+    "BackendRegistry",
+    "ClaudeCodeBackend",
+    "CodexBackend",
+    "Completion",
+    "Effort",
+    "PiBackend",
+    "Usage",
+    "cli_env",
+    "default_registry",
+    "run_cli",
+    "suggest_model",
+]

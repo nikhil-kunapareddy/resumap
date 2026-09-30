@@ -5,6 +5,7 @@ ModelGateway, the Paths, and any service it builds on) and raises
 ``errors.ServiceError`` subclasses for requests it refuses. ``Services`` wires
 one of each; the API layer is handed it and only translates HTTP to calls.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -36,13 +37,24 @@ class Services:
     outreach: OutreachService
 
     @classmethod
-    def build(cls, store: Store, gateway: ModelGateway, paths: Paths, *,
-              default_backend: str, default_first_name: str) -> Services:
-        settings = SettingsService(store, gateway, default_backend=default_backend,
-                                   default_first_name=default_first_name)
+    def build(
+        cls,
+        store: Store,
+        gateway: ModelGateway,
+        paths: Paths,
+        *,
+        default_backend: str,
+        default_first_name: str,
+    ) -> Services:
+        settings = SettingsService(
+            store, gateway, default_backend=default_backend, default_first_name=default_first_name
+        )
         exports = ExportService(store, paths, settings)
         return cls(
-            store=store, gateway=gateway, paths=paths, settings=settings,
+            store=store,
+            gateway=gateway,
+            paths=paths,
+            settings=settings,
             resumes=ResumeService(store, paths),
             experiences=ExperienceService(store),
             jobs=JobService(store, gateway),
@@ -53,5 +65,14 @@ class Services:
         )
 
 
-__all__ = ["Services", "CorrectionService", "ExperienceService", "ExportService", "JobService",
-           "OutreachService", "ResumeService", "RewriteService", "SettingsService"]
+__all__ = [
+    "Services",
+    "CorrectionService",
+    "ExperienceService",
+    "ExportService",
+    "JobService",
+    "OutreachService",
+    "ResumeService",
+    "RewriteService",
+    "SettingsService",
+]

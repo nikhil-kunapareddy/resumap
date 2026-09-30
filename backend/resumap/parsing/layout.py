@@ -4,6 +4,7 @@ The goal is not perfect fidelity -- it is capturing enough of the original
 resume's typography (fonts, sizes, weights, indents, tab stops, rules) that
 the regenerated PDF reads as the same document.
 """
+
 from __future__ import annotations
 
 import re
@@ -32,6 +33,7 @@ class Run:
     it too is matched back onto the characters above it; a typed-out email is
     often styled as a link with no annotation behind it at all.
     """
+
     text: str
     bold: bool
     italic: bool
@@ -75,6 +77,7 @@ class Line:
 @dataclass
 class Rule:
     """A horizontal divider line, usually under a section heading."""
+
     top: float
     x0: float
     x1: float
@@ -161,8 +164,10 @@ def _underlined(ch: dict, strokes: list[dict]) -> bool:
     """True when a short horizontal stroke runs just under this glyph."""
     cx = (ch["x0"] + ch["x1"]) / 2
     for s in strokes:
-        if s["x0"] - 0.5 <= cx <= s["x1"] + 0.5 and \
-                ch["bottom"] - ch["size"] * 0.4 <= s["top"] <= ch["bottom"] + 1.5:
+        if (
+            s["x0"] - 0.5 <= cx <= s["x1"] + 0.5
+            and ch["bottom"] - ch["size"] * 0.4 <= s["top"] <= ch["bottom"] + 1.5
+        ):
             return True
     return False
 
@@ -188,8 +193,12 @@ def _dominant_style(chars: list[dict]) -> tuple[bool, bool, str, float]:
     fonts = [c.get("fontname", "") for c in chars]
     bold = sum(_is_bold(f) for f in fonts) > len(fonts) / 2
     italic = sum(_is_italic(f) for f in fonts) > len(fonts) / 2
-    return bold, italic, _dominant(fonts) or "Helvetica", _dominant(
-        [round(c["size"], 1) for c in chars]) or 10.0
+    return (
+        bold,
+        italic,
+        _dominant(fonts) or "Helvetica",
+        _dominant([round(c["size"], 1) for c in chars]) or 10.0,
+    )
 
 
 def _chunk_row(row: list[dict]) -> tuple[list[list[dict]], list[float]]:
@@ -241,19 +250,28 @@ def _runs_from_chunks(chunks: list[list[dict]]) -> list[Run]:
         bold, italic, _f, _s = _dominant_style(chunk)
         uri, color, under = _dominant_link(chunk)
         text = "".join(c["text"] for c in chunk)
-        if (runs and runs[-1].bold == bold and runs[-1].italic == italic
-                and runs[-1].uri == uri and runs[-1].color == color
-                and runs[-1].underline == under):
+        if (
+            runs
+            and runs[-1].bold == bold
+            and runs[-1].italic == italic
+            and runs[-1].uri == uri
+            and runs[-1].color == color
+            and runs[-1].underline == under
+        ):
             runs[-1].text += " " + text
         else:
-            runs.append(Run(text=text, bold=bold, italic=italic, uri=uri,
-                            color=color, underline=under))
+            runs.append(
+                Run(text=text, bold=bold, italic=italic, uri=uri, color=color, underline=under)
+            )
     return runs
 
 
-def _group_chars_to_lines(chars: list[dict], page_no: int,
-                          links: list[dict] | None = None,
-                          strokes: list[dict] | None = None) -> list[Line]:
+def _group_chars_to_lines(
+    chars: list[dict],
+    page_no: int,
+    links: list[dict] | None = None,
+    strokes: list[dict] | None = None,
+) -> list[Line]:
     """Cluster characters into visual lines by their vertical midpoint."""
     if not chars:
         return []
@@ -383,9 +401,15 @@ def extract_pdf(path: str) -> ExtractedDoc:
             # the character stream, so they have to be read and re-attached
             # explicitly -- extracting text alone silently drops every one.
             links = [
-                {"uri": h["uri"], "x0": float(h["x0"]), "x1": float(h["x1"]),
-                 "top": float(h["top"]), "bottom": float(h["bottom"])}
-                for h in (page.hyperlinks or []) if h.get("uri")
+                {
+                    "uri": h["uri"],
+                    "x0": float(h["x0"]),
+                    "x1": float(h["x1"]),
+                    "top": float(h["top"]),
+                    "bottom": float(h["bottom"]),
+                }
+                for h in (page.hyperlinks or [])
+                if h.get("uri")
             ]
             # Underlines: strokes too short to be a section rule.
             strokes = [
@@ -401,12 +425,14 @@ def extract_pdf(path: str) -> ExtractedDoc:
                 h = abs(r["y1"] - r["y0"])
                 w = abs(r["x1"] - r["x0"])
                 if h <= 2.5 and w > page.width * 0.30:
-                    doc.rules.append(Rule(top=float(r["top"]), x0=float(r["x0"]),
-                                          x1=float(r["x1"]), page=i))
+                    doc.rules.append(
+                        Rule(top=float(r["top"]), x0=float(r["x0"]), x1=float(r["x1"]), page=i)
+                    )
             for ln in page.lines:
                 if abs(ln["y1"] - ln["y0"]) <= 2.5 and abs(ln["x1"] - ln["x0"]) > page.width * 0.30:
-                    doc.rules.append(Rule(top=float(ln["top"]), x0=float(ln["x0"]),
-                                          x1=float(ln["x1"]), page=i))
+                    doc.rules.append(
+                        Rule(top=float(ln["top"]), x0=float(ln["x0"]), x1=float(ln["x1"]), page=i)
+                    )
 
     doc.lines = all_lines
 
@@ -436,8 +462,7 @@ def _docx_runs(para: Any) -> list[Run]:
     def add(text: str, bold: bool, italic: bool, uri: str) -> None:
         if not text.strip():
             return
-        if (runs and runs[-1].bold == bold and runs[-1].italic == italic
-                and runs[-1].uri == uri):
+        if runs and runs[-1].bold == bold and runs[-1].italic == italic and runs[-1].uri == uri:
             runs[-1].text += text
         else:
             runs.append(Run(text=text, bold=bold, italic=italic, uri=uri))
@@ -488,10 +513,20 @@ def extract_docx(path: str) -> ExtractedDoc:
             if styled:
                 styled.insert(0, Run(text="• ", bold=False, italic=False))
         doc.lines.append(
-            Line(text=text, x0=indent, x1=558.0, top=y, bottom=y + size * 1.35,
-                 size=size, font="Helvetica-Bold" if bold else "Helvetica",
-                 bold=bold, italic=italic, page=0, text_x0=indent,
-                 runs=styled)
+            Line(
+                text=text,
+                x0=indent,
+                x1=558.0,
+                top=y,
+                bottom=y + size * 1.35,
+                size=size,
+                font="Helvetica-Bold" if bold else "Helvetica",
+                bold=bold,
+                italic=italic,
+                page=0,
+                text_x0=indent,
+                runs=styled,
+            )
         )
         y += size * 1.7
     return doc
@@ -512,9 +547,19 @@ def extract_txt(path: str) -> ExtractedDoc:
             is_head = stripped.isupper() and len(stripped) < 40
             size = 11.5 if is_head else 10.5
             doc.lines.append(
-                Line(text=stripped, x0=indent, x1=558.0, top=y, bottom=y + size * 1.35,
-                     size=size, font="Helvetica", bold=is_head, italic=False, page=0,
-                     text_x0=indent)
+                Line(
+                    text=stripped,
+                    x0=indent,
+                    x1=558.0,
+                    top=y,
+                    bottom=y + size * 1.35,
+                    size=size,
+                    font="Helvetica",
+                    bold=is_head,
+                    italic=False,
+                    page=0,
+                    text_x0=indent,
+                )
             )
             y += size * 1.7
     return doc

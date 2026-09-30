@@ -5,6 +5,7 @@ parsing/jd.py, not a model) while transform, corrections and outreach return
 503. A backend that answers badly costs one bullet or one draft, never the
 batch or the state already saved.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -27,8 +28,9 @@ def test_without_a_backend_the_first_three_steps_still_work(client, fake, resume
     assert [p["text"] for p in job["points"]] == JOB_POINTS
     assert job["source"] == "verbatim" and job["warning"].startswith(DOWN)
 
-    r = client.post(f"/api/jobs/{job['id']}/mappings",
-                    json={"block_id": "bul005", "point_ids": ["jd01"]})
+    r = client.post(
+        f"/api/jobs/{job['id']}/mappings", json={"block_id": "bul005", "point_ids": ["jd01"]}
+    )
     assert r.status_code == 200
     # The preview is built locally, so it needs no backend either.
     preview = client.get(f"/api/jobs/{job['id']}/prompt", params={"block_id": "bul005"})
@@ -51,22 +53,25 @@ def test_a_failed_bullet_is_reported_and_its_siblings_are_saved(client, fake, jo
     def flaky(system, user):
         if "Reduced nightly batch runtime" in user:
             raise TimeoutError("no answer in 120s")
-        return {"rewritten": "Fine.", "keywords_used": [], "substitutions": [],
-                "defensible": True}
+        return {"rewritten": "Fine.", "keywords_used": [], "substitutions": [], "defensible": True}
+
     fake.respond("Rewrite", flaky)
     for box in ("bul005", "bul006", "bul007"):
-        client.post(f"/api/jobs/{job['id']}/mappings", json={"block_id": box,
-                                                             "point_ids": ["jd01"]})
+        client.post(
+            f"/api/jobs/{job['id']}/mappings", json={"block_id": box, "point_ids": ["jd01"]}
+        )
     out = client.post(f"/api/jobs/{job['id']}/transform", json={}).json()
     failed = [r for r in out["results"] if not r["ok"]]
     assert [(r["block_id"], r["error"]) for r in failed] == [
-        ("bul006", "TimeoutError: no answer in 120s")]
+        ("bul006", "TimeoutError: no answer in 120s")
+    ]
     assert sorted(out["rewrites"]) == ["bul005", "bul007"]
 
 
 def test_a_reroll_that_fails_keeps_the_previous_rewrite(client, fake, job):
-    client.post(f"/api/jobs/{job['id']}/mappings", json={"block_id": "bul005",
-                                                         "point_ids": ["jd01"]})
+    client.post(
+        f"/api/jobs/{job['id']}/mappings", json={"block_id": "bul005", "point_ids": ["jd01"]}
+    )
     first = client.post(f"/api/jobs/{job['id']}/transform", json={}).json()
     fake.respond("Rewrite", None)
     again = client.post(f"/api/jobs/{job['id']}/transform", json={"block_ids": ["bul005"]})
@@ -92,25 +97,38 @@ def test_a_broken_correction_reply_is_a_502_and_changes_nothing(client, fake, jo
 def test_a_failing_test_call_reports_why(client, fake):
     def unauthorised(system, user):
         raise RuntimeError("401 Unauthorized")
+
     fake.respond("Ping", unauthorised)
     r = client.post("/api/backends/api/test")
     assert r.json() == {"ok": False, "detail": "401 Unauthorized", "ms": None}
 
 
-def test_a_correction_that_fails_to_save_leaves_nothing_half_applied(client, fake, job,
-                                                                     monkeypatch):
+def test_a_correction_that_fails_to_save_leaves_nothing_half_applied(
+    client, fake, job, monkeypatch
+):
     """The edits, the layout and the chat turns are one transaction."""
     from resumap.storage import ChatRepository
 
-    fake.respond("PdfRevision", {
-        "reply": "Done.", "justify": "unchanged",
-        "edits": [{"block_id": "bul007", "text": "Led 4 engineers.", "substitutions": [],
-                   "defensible": True}],
-        "layout": [{"setting": "font_size", "value": 95}],
-    })
+    fake.respond(
+        "PdfRevision",
+        {
+            "reply": "Done.",
+            "justify": "unchanged",
+            "edits": [
+                {
+                    "block_id": "bul007",
+                    "text": "Led 4 engineers.",
+                    "substitutions": [],
+                    "defensible": True,
+                }
+            ],
+            "layout": [{"setting": "font_size", "value": 95}],
+        },
+    )
 
     def disk_full(*args, **kwargs):
         raise OSError("disk full")
+
     with monkeypatch.context() as m:
         m.setattr(ChatRepository, "add", disk_full)
         with pytest.raises(OSError):

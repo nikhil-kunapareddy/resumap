@@ -21,6 +21,7 @@ The answer, the usage and any error all arrive as JSONL events on stdout
 (``--json``). A failed turn -- an expired login, say -- is a ``turn.failed``
 event, which is raised with Codex's own message.
 """
+
 from __future__ import annotations
 
 import copy
@@ -40,8 +41,7 @@ from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
 TIMEOUT_S = 300
 
 # Resumap's effort levels onto Codex's model_reasoning_effort.
-EFFORT = {"low": "low", "medium": "medium", "high": "high", "xhigh": "high",
-          "max": "high"}
+EFFORT = {"low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high"}
 
 # `codex login status` spawns a process; the status is asked for on every
 # request, so it is remembered briefly.
@@ -119,45 +119,77 @@ class CodexBackend(Backend):
     def unavailable(self) -> str | None:
         cli = self._cli_path()
         if cli is None:
-            return ("Could not find the `codex` command. Install the Codex CLI and "
-                    "run `codex login`, or point RESUMAP_CODEX_CLI at the binary.")
+            return (
+                "Could not find the `codex` command. Install the Codex CLI and "
+                "run `codex login`, or point RESUMAP_CODEX_CLI at the binary."
+            )
         now = time.monotonic()
         if now - self._login["at"] > _LOGIN_TTL_S:
             try:
-                res = subprocess.run([cli, "login", "status"], capture_output=True,
-                                     text=True, timeout=15, env=cli_env(self._dotenv_keys))
-                why = None if res.returncode == 0 else (
-                    "Codex is not signed in. Run `codex login` in a terminal.")
+                res = subprocess.run(
+                    [cli, "login", "status"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    env=cli_env(self._dotenv_keys),
+                )
+                why = (
+                    None
+                    if res.returncode == 0
+                    else ("Codex is not signed in. Run `codex login` in a terminal.")
+                )
             except (OSError, subprocess.TimeoutExpired) as exc:
                 why = f"Could not ask Codex whether it is signed in: {exc}"
             self._login.update(at=now, why=why)
         return self._login["why"]
 
-    async def complete(self, *, model: str, system: str, user: str,
-                       schema: type[BaseModel], max_tokens: int,
-                       effort: Effort) -> Completion:
+    async def complete(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+        max_tokens: int,
+        effort: Effort,
+    ) -> Completion:
         cli = self._cli_path()
         if cli is None:
             raise RuntimeError(self.unavailable() or "codex not found")
         reasoning = EFFORT.get(effort, "medium")
-        prompt = (f"{system}\n\n---\n\n{user}\n\n---\nAnswer directly with the JSON "
-                  "object. Do not run commands or read files: everything you need "
-                  "is above.")
+        prompt = (
+            f"{system}\n\n---\n\n{user}\n\n---\nAnswer directly with the JSON "
+            "object. Do not run commands or read files: everything you need "
+            "is above."
+        )
 
         # max_tokens has no `codex exec` equivalent; the model's own cap applies.
         with tempfile.TemporaryDirectory(prefix="resumap-codex-") as tmp:
             schema_path = Path(tmp) / "schema.json"
             schema_path.write_text(json.dumps(_strict(schema.model_json_schema())))
-            cmd = [cli, "exec", "--json", "--output-schema", str(schema_path),
-                   "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral",
-                   "--color", "never", "-C", tmp,
-                   "-c", f'model_reasoning_effort="{reasoning}"']
+            cmd = [
+                cli,
+                "exec",
+                "--json",
+                "--output-schema",
+                str(schema_path),
+                "--sandbox",
+                "read-only",
+                "--skip-git-repo-check",
+                "--ephemeral",
+                "--color",
+                "never",
+                "-C",
+                tmp,
+                "-c",
+                f'model_reasoning_effort="{reasoning}"',
+            ]
             if model:
                 cmd += ["-m", model]
             cmd.append("-")  # the prompt comes on stdin
-            code, stdout, stderr = await run_cli(cmd, prompt, cwd=tmp,
-                                                 env=cli_env(self._dotenv_keys),
-                                                 timeout=TIMEOUT_S)
+            code, stdout, stderr = await run_cli(
+                cmd, prompt, cwd=tmp, env=cli_env(self._dotenv_keys), timeout=TIMEOUT_S
+            )
 
         ev = _read_events(stdout)
         if ev["error"] and not ev["text"]:
@@ -186,6 +218,5 @@ class CodexBackend(Backend):
             ),
             # `codex exec resume <id>` would reopen it, were it not ephemeral.
             request_id=ev["thread"],
-            meta={"effort": reasoning, "model": model or "codex default",
-                  "exit_code": code},
+            meta={"effort": reasoning, "model": model or "codex default", "exit_code": code},
         )

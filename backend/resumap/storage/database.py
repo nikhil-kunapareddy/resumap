@@ -5,6 +5,7 @@ transaction that is a fresh connection, committed (or rolled back) and closed
 when the call returns. Inside ``Database.transaction()`` every call joins one
 shared connection instead, so a multi-step write lands whole or not at all.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -19,7 +20,8 @@ from .schema import migrate
 # Contexts are per thread and per asyncio task, so concurrent requests never
 # see each other's transaction.
 _open_transaction: ContextVar[tuple[Database, sqlite3.Connection] | None] = ContextVar(
-    "resumap_open_transaction", default=None)
+    "resumap_open_transaction", default=None
+)
 
 
 class Database:
@@ -47,7 +49,7 @@ class Database:
             return
         conn = self._open()
         try:
-            with conn:          # commit on success, roll back on an exception
+            with conn:  # commit on success, roll back on an exception
                 yield conn
         finally:
             conn.close()

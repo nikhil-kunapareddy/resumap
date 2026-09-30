@@ -6,6 +6,7 @@
 ``main`` know about HTTP. A new import that crosses a line fails here, so the
 structure cannot erode one convenient shortcut at a time.
 """
+
 from __future__ import annotations
 
 import ast
@@ -38,16 +39,16 @@ def _package(path: Path) -> str:
 def _imports(path: Path) -> tuple[set[str], set[str]]:
     """(app packages imported, third-party top-level modules imported) by one file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    here = path.relative_to(APP).parent.parts   # e.g. ("llm", "backends")
+    here = path.relative_to(APP).parent.parts  # e.g. ("llm", "backends")
     app, external = set(), set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            if node.level:   # relative: resolve against this file's package
-                base = here[:len(here) - (node.level - 1)] if node.level > 1 else here
+            if node.level:  # relative: resolve against this file's package
+                base = here[: len(here) - (node.level - 1)] if node.level > 1 else here
                 target = list(base) + (node.module.split(".") if node.module else [])
                 if target:
                     app.add(target[0])
-                else:   # "from .. import obs": the names are the packages
+                else:  # "from .. import obs": the names are the packages
                     app.update(a.name for a in node.names)
             elif node.module:
                 external.add(node.module.split(".")[0])

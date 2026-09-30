@@ -14,6 +14,7 @@ The storage layer hands these models out and the routes work with them. The
 parser, renderer and prompt builders still take the plain-dict form the
 models serialise to (``ResumeDoc.as_dict()`` for the resume).
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -41,6 +42,7 @@ class Document(BaseModel):
 
 
 # -- the parsed resume ------------------------------------------------------
+
 
 class Run(Document):
     """A stretch of one line in a single style, possibly a link."""
@@ -79,13 +81,14 @@ class Block(Document):
     kind: BlockKind
     section: str = ""
     text: str
-    left: str = ""        # an entry's two columns, when it has a right-aligned one
+    left: str = ""  # an entry's two columns, when it has a right-aligned one
     right: str = ""
     bullet_char: str = "•"
     rule_below: bool = False
     mappable: bool = False
     reason: str | None = Field(
-        default=None, description="Why the block is not a mappable point; null for one that is.")
+        default=None, description="Why the block is not a mappable point; null for one that is."
+    )
     truncated: bool = False
     justified: bool = False
     runs: list[Run] = Field(default_factory=list)
@@ -146,6 +149,7 @@ class ResumeSummary(Entity):
 
 # -- jobs and what hangs off them -------------------------------------------
 
+
 class JDPoint(Document):
     """One line of a job description, verbatim. Only its labels come from a model."""
 
@@ -199,7 +203,8 @@ class RewriteMeta(Document):
     placement_user: bool = False
     replaced: bool = False
     source: str | None = Field(
-        default=None, description='"chat" when the corrections chat wrote it.')
+        default=None, description='"chat" when the corrections chat wrote it.'
+    )
 
 
 class Rewrite(Entity):
@@ -261,6 +266,7 @@ class OutreachDraft(Entity):
 
 
 # -- global libraries -------------------------------------------------------
+
 
 class Experience(Entity):
     """Something that is not on the resume, stored once and offered to every job."""

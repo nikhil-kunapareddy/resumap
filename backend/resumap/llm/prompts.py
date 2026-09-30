@@ -4,6 +4,7 @@ The Map step's Prompt... dialog edits these: the rewrite, experience and
 replace instructions and the three mode rules. Code reads them through a
 ``PromptStore``, never the constants, so an edit reaches every call.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -30,7 +31,6 @@ EDITABLE_PROMPTS = {
 }
 
 
-
 MODE_RULES: dict[str, str] = {
     RewriteMode.TRUTHFUL: """MODE: TRUTHFUL REALIGN (most conservative)
 - Every fact, metric, number, scale and named tool in the rewrite must appear in
@@ -40,7 +40,6 @@ MODE_RULES: dict[str, str] = {
 - You may adopt a JD keyword ONLY when it is a genuine synonym for something the
   original already says.
 - Never add a tool, platform, team size, or metric that is not in the original.""",
-
     RewriteMode.BRIDGE: """MODE: REALIGN + BRIDGE SYNONYMS
 - Preserve every metric and outcome from the original exactly.
 - You MAY re-express an existing tool or method using the JD's equivalent term
@@ -50,7 +49,6 @@ MODE_RULES: dict[str, str] = {
   "X-style" / "equivalent to X" over claiming X outright.
 - Record every bridge in `substitutions` with grounded=false.
 - Never invent a metric, a team, or a domain the original does not mention.""",
-
     RewriteMode.AGGRESSIVE: """MODE: AGGRESSIVE KEYWORD ALIGNMENT (maximum ATS overlap)
 - Priority is maximising literal overlap with the JD's keywords and phrasing.
 - You MAY introduce tools, frameworks and terminology from the mapped JD points
@@ -174,10 +172,11 @@ Placement, from <placements>:
   PROJECTS, LEADERSHIP or ADDITIONAL EXPERIENCE."""
 
 
-
 def with_note(system: str, extra: str) -> str:
     if extra.strip():
-        system += f"\n\nADDITIONAL USER INSTRUCTION (overrides tone preferences above):\n{extra.strip()}"
+        system += (
+            f"\n\nADDITIONAL USER INSTRUCTION (overrides tone preferences above):\n{extra.strip()}"
+        )
     return system
 
 
@@ -206,16 +205,24 @@ class PromptStore:
 
     def set_overrides(self, overrides: Mapping[str, str]) -> None:
         """Replace every edit at once; unknown keys and blank text are ignored."""
-        self._overrides = {k: v for k, v in overrides.items()
-                           if k in EDITABLE_PROMPTS and v.strip()}
+        self._overrides = {
+            k: v for k, v in overrides.items() if k in EDITABLE_PROMPTS and v.strip()
+        }
 
     def is_custom(self, key: str) -> bool:
         return key in self._overrides
 
     def describe(self) -> list[dict]:
-        return [{"key": k, "label": label, "default": self.default(k),
-                 "text": self.text(k), "custom": self.is_custom(k)}
-                for k, label in EDITABLE_PROMPTS.items()]
+        return [
+            {
+                "key": k,
+                "label": label,
+                "default": self.default(k),
+                "text": self.text(k),
+                "custom": self.is_custom(k),
+            }
+            for k, label in EDITABLE_PROMPTS.items()
+        ]
 
     def mode_rules(self, mode: str) -> str:
         return self.text(f"mode.{mode}" if mode in MODE_RULES else "mode.aggressive")

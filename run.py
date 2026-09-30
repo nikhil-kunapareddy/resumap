@@ -4,6 +4,7 @@
 Run with any Python 3.10+: if the project's virtualenv exists, this re-execs
 into it so you never have to remember to activate anything.
 """
+
 from __future__ import annotations
 
 import os
@@ -14,7 +15,7 @@ import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-BACKEND_DIR = ROOT / "backend"      # the `resumap` package lives here
+BACKEND_DIR = ROOT / "backend"  # the `resumap` package lives here
 VENV_DIR = ROOT / ".venv"
 VENV_PY = VENV_DIR / "bin" / "python"
 

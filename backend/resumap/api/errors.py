@@ -4,6 +4,7 @@ Every error body is ``{"detail": "<one readable sentence>"}``: the UI shows
 ``detail`` as the message. Services raise ``ServiceError`` subclasses and this
 is the one place that knows which status each one is.
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
@@ -38,7 +39,6 @@ def install(app: FastAPI) -> None:
         """422, with the per-field errors joined into one readable `detail`."""
         errors = jsonable_encoder(exc.errors())
         detail = "; ".join(
-            f"{'.'.join(str(p) for p in e['loc'][1:]) or e['loc'][0]}: {e['msg']}"
-            for e in errors)
-        return JSONResponse(ErrorOut(detail=detail, errors=errors).model_dump(),
-                            status_code=422)
+            f"{'.'.join(str(p) for p in e['loc'][1:]) or e['loc'][0]}: {e['msg']}" for e in errors
+        )
+        return JSONResponse(ErrorOut(detail=detail, errors=errors).model_dump(), status_code=422)

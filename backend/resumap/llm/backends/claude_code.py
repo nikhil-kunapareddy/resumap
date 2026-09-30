@@ -26,6 +26,7 @@ Five options keep this a single structured request instead of a coding agent:
   point of choosing this backend. An empty value reads as unset, leaving the
   CLI to fall back to its own stored credentials.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -68,19 +69,30 @@ class ClaudeCodeBackend(Backend):
 
     def unavailable(self) -> str | None:
         if importlib.util.find_spec("claude_agent_sdk") is None:
-            return ("The claude-agent-sdk package is not installed. Run `uv sync` "
-                    "(or `pip install -e .`), or set RESUMAP_BACKEND=api "
-                    "to use an Anthropic API key instead.")
+            return (
+                "The claude-agent-sdk package is not installed. Run `uv sync` "
+                "(or `pip install -e .`), or set RESUMAP_BACKEND=api "
+                "to use an Anthropic API key instead."
+            )
         if self._cli_path() is None:
-            return ("Could not find the `claude` command. Install Claude Code and "
-                    "sign in, point RESUMAP_CLAUDE_CLI at the binary if it is not "
-                    "on this process's PATH, or set RESUMAP_BACKEND=api to use an "
-                    "Anthropic API key instead.")
+            return (
+                "Could not find the `claude` command. Install Claude Code and "
+                "sign in, point RESUMAP_CLAUDE_CLI at the binary if it is not "
+                "on this process's PATH, or set RESUMAP_BACKEND=api to use an "
+                "Anthropic API key instead."
+            )
         return None
 
-    async def complete(self, *, model: str, system: str, user: str,
-                       schema: type[BaseModel], max_tokens: int,
-                       effort: Effort) -> Completion:
+    async def complete(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+        max_tokens: int,
+        effort: Effort,
+    ) -> Completion:
         from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
         # max_tokens has no Agent SDK equivalent -- the CLI applies the model's own
@@ -88,8 +100,7 @@ class ClaudeCodeBackend(Backend):
         options = ClaudeAgentOptions(
             model=model,
             system_prompt=system,
-            output_format={"type": "json_schema",
-                           "schema": schema.model_json_schema()},
+            output_format={"type": "json_schema", "schema": schema.model_json_schema()},
             effort=effort,
             tools=[],
             setting_sources=[],
@@ -122,21 +133,24 @@ class ClaudeCodeBackend(Backend):
             parsed=parsed,
             # Structured runs put the JSON in `result`; fall back to the object so
             # the archive is never blank.
-            text=result.result or json.dumps(result.structured_output, indent=2,
-                                             default=str),
+            text=result.result or json.dumps(result.structured_output, indent=2, default=str),
             usage=Usage(
                 # Claude Code caches its prompt prefix, which lands nearly all the
                 # input under cache_creation on a first call. Folding it in keeps
                 # the logged token count comparable to the API backend's.
-                input_tokens=(int(u.get("input_tokens") or 0)
-                              + int(u.get("cache_creation_input_tokens") or 0)),
+                input_tokens=(
+                    int(u.get("input_tokens") or 0) + int(u.get("cache_creation_input_tokens") or 0)
+                ),
                 output_tokens=int(u.get("output_tokens") or 0),
                 cache_read_input_tokens=int(u.get("cache_read_input_tokens") or 0),
             ),
             # `claude --resume <id>` reopens this exact call.
             request_id=result.session_id,
-            meta={"effort": effort, "subtype": result.subtype,
-                  "turns": result.num_turns,
-                  "reported_cost_usd": result.total_cost_usd,
-                  "errors": result.errors or None},
+            meta={
+                "effort": effort,
+                "subtype": result.subtype,
+                "turns": result.num_turns,
+                "reported_cost_usd": result.total_cost_usd,
+                "errors": result.errors or None,
+            },
         )

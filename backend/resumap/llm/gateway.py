@@ -7,6 +7,7 @@ the prompt archive, usage and cost, and checking the reply against the rules
 the app depends on, whatever the prompt asked for. Services call its methods;
 nothing else reaches a backend.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,8 +28,10 @@ class BackendUnavailable(RuntimeError):
 
 # The request builders behind each kind of transform job, for the preview.
 REQUESTS: dict[str, Callable[..., tuple[str, str]]] = {
-    "rewrite": bullets.rewrite_request, "replace": bullets.replace_request,
-    "experience": bullets.experience_request}
+    "rewrite": bullets.rewrite_request,
+    "replace": bullets.replace_request,
+    "experience": bullets.experience_request,
+}
 
 
 class ModelGateway:
@@ -82,22 +85,32 @@ class ModelGateway:
             return {"ok": False, "detail": why}
         try:
             with obs.timer() as t:
-                res = await b.complete(model=model,
-                                       system="You are a connectivity check. Reply with ok=true.",
-                                       user="Reply with ok=true and your model name.",
-                                       schema=Ping, max_tokens=200, effort="low")
+                res = await b.complete(
+                    model=model,
+                    system="You are a connectivity check. Reply with ok=true.",
+                    user="Reply with ok=true and your model name.",
+                    schema=Ping,
+                    max_tokens=200,
+                    effort="low",
+                )
         except Exception as exc:  # noqa: BLE001 - the error is the answer here
             obs.warn("backend.test_failed", backend=name, error=type(exc).__name__)
             return {"ok": False, "detail": str(exc)[:400]}
         used = (res.meta or {}).get("model") or model or f"{name} default"
         obs.record_usage("backend_test", used, res.usage, t.ms, res.request_id, backend=name)
         if res.parsed is None:
-            return {"ok": False,
-                    "detail": f"{b.label} answered, but not in the requested JSON shape."}
+            return {
+                "ok": False,
+                "detail": f"{b.label} answered, but not in the requested JSON shape.",
+            }
         reported = res.parsed.model.strip()
-        return {"ok": True, "ms": round(t.ms),
-                "detail": f"{b.label} answered in {t.ms / 1000:.1f}s"
-                          + (f" ({reported})" if reported else "") + "."}
+        return {
+            "ok": True,
+            "ms": round(t.ms),
+            "detail": f"{b.label} answered in {t.ms / 1000:.1f}s"
+            + (f" ({reported})" if reported else "")
+            + ".",
+        }
 
     # ----------------------------------------------------------------------
     # JD labelling
@@ -115,9 +128,14 @@ class ModelGateway:
             return out
 
         user = tagging.tag_prompt(points, text)
-        obs.event("jd.parse_start", **obs.tmeta(text, "jd"), points=len(points),
-                  lines=text.count("\n") + 1, model=self.registry.model_label(),
-                  backend=self.registry.current_name())
+        obs.event(
+            "jd.parse_start",
+            **obs.tmeta(text, "jd"),
+            points=len(points),
+            lines=text.count("\n") + 1,
+            model=self.registry.model_label(),
+            backend=self.registry.current_name(),
+        )
         try:
             backend = self._backend()
             with obs.timer() as t:
@@ -131,24 +149,46 @@ class ModelGateway:
                 )
             parsed = res.parsed
             archived = obs.archive_prompt(
-                self.log_dir, "jd_parse", tagging.JD_SYSTEM, user, res.text,
-                {"model": self._used(res), "backend": self.registry.current_name(),
-                 "request_id": res.request_id, **res.meta})
-            obs.record_usage("jd_parse", self._used(res), res.usage, t.ms, res.request_id,
-                             backend=self.registry.current_name(),
-                             points=len(parsed.tags) if parsed else 0,
-                             prompt_file=archived)
+                self.log_dir,
+                "jd_parse",
+                tagging.JD_SYSTEM,
+                user,
+                res.text,
+                {
+                    "model": self._used(res),
+                    "backend": self.registry.current_name(),
+                    "request_id": res.request_id,
+                    **res.meta,
+                },
+            )
+            obs.record_usage(
+                "jd_parse",
+                self._used(res),
+                res.usage,
+                t.ms,
+                res.request_id,
+                backend=self.registry.current_name(),
+                points=len(parsed.tags) if parsed else 0,
+                prompt_file=archived,
+            )
             if parsed:
                 tagging.apply_tags(points, parsed.tags)
                 out["company"] = parsed.company.strip() or guess_company(text)
                 out["role"] = parsed.role.strip() or guess_role(text)
                 out["source"] = f"verbatim, labelled by {self.agent()}"
-                obs.event("jd.parsed", source="claude", points=len(points),
-                          has_company=bool(out["company"]), has_role=bool(out["role"]))
+                obs.event(
+                    "jd.parsed",
+                    source="claude",
+                    points=len(points),
+                    has_company=bool(out["company"]),
+                    has_role=bool(out["role"]),
+                )
                 return out
             obs.warn("jd.untagged", why="no_parse")
-            out["warning"] = (f"Kept your job description word for word. {self.agent()} "
-                              "could not tag the points, so keyword hints are missing.")
+            out["warning"] = (
+                f"Kept your job description word for word. {self.agent()} "
+                "could not tag the points, so keyword hints are missing."
+            )
         except BackendUnavailable as exc:
             # The points are already final, so this costs labels, not text.
             obs.warn("jd.untagged", why="backend_unavailable")
@@ -156,8 +196,10 @@ class ModelGateway:
         except Exception as exc:  # noqa: BLE001 - labelling is optional, surface why
             obs.record_failure("jd_parse", exc, 0.0)
             obs.warn("jd.untagged", why=type(exc).__name__)
-            out["warning"] = (f"{self.agent()} could not tag the points "
-                              f"({type(exc).__name__}: {exc}). Your job description is unchanged.")
+            out["warning"] = (
+                f"{self.agent()} could not tag the points "
+                f"({type(exc).__name__}: {exc}). Your job description is unchanged."
+            )
         return out
 
     # ----------------------------------------------------------------------
@@ -175,12 +217,21 @@ class ModelGateway:
         extra: str = "",
         max_chars: int = 0,
     ) -> dict:
-        system, user = bullets.rewrite_request(self.prompts, bullet, section, jd_points, role,
-                                               company, mode, extra, max_chars)
+        system, user = bullets.rewrite_request(
+            self.prompts, bullet, section, jd_points, role, company, mode, extra, max_chars
+        )
         return await self._run_rewrite("rewrite", system, user, bullet, jd_points, mode, max_chars)
 
-    async def _run_rewrite(self, op: str, system: str, user: str, bullet: str,
-                           jd_points: list[dict], mode: str, max_chars: int) -> dict:
+    async def _run_rewrite(
+        self,
+        op: str,
+        system: str,
+        user: str,
+        bullet: str,
+        jd_points: list[dict],
+        mode: str,
+        max_chars: int,
+    ) -> dict:
         """Send one bullet's (system, user) pair and check the Rewrite that comes back.
 
         Shared by realigned and replaced bullets: both fill the slot `bullet` held,
@@ -199,37 +250,67 @@ class ModelGateway:
         r = out.parsed
         request_id = out.request_id
         archived = obs.archive_prompt(
-            self.log_dir, op, system, user, out.text,
-            {"model": self._used(out), "backend": self.registry.current_name(), "mode": mode,
-             "request_id": request_id,
-             "jd_points": [p.get("id") for p in jd_points], **out.meta})
+            self.log_dir,
+            op,
+            system,
+            user,
+            out.text,
+            {
+                "model": self._used(out),
+                "backend": self.registry.current_name(),
+                "mode": mode,
+                "request_id": request_id,
+                "jd_points": [p.get("id") for p in jd_points],
+                **out.meta,
+            },
+        )
         if r is None:
-            obs.warn("rewrite.unparsable", op=op, request_id=request_id,
-                     prompt_file=archived)
+            obs.warn("rewrite.unparsable", op=op, request_id=request_id, prompt_file=archived)
             raise RuntimeError(f"{self.agent()} returned no parsable rewrite.")
 
         introduced = [x for x in r.substitutions if not x.grounded]
         delta = (len(r.rewritten) - len(bullet)) / max(len(bullet), 1) * 100
-        obs.record_usage(op, self._used(out), out.usage, t.ms, request_id,
-                         backend=self.registry.current_name(),
-                         mode=mode, points=len(jd_points), prompt_file=archived,
-                         **obs.tmeta(bullet, "orig"), **obs.tmeta(r.rewritten, "new"),
-                         length_delta_pct=round(delta, 1),
-                         keywords=len(r.keywords_used),
-                         substitutions=len(r.substitutions),
-                         introduced=len(introduced),
-                         defensible=r.defensible)
+        obs.record_usage(
+            op,
+            self._used(out),
+            out.usage,
+            t.ms,
+            request_id,
+            backend=self.registry.current_name(),
+            mode=mode,
+            points=len(jd_points),
+            prompt_file=archived,
+            **obs.tmeta(bullet, "orig"),
+            **obs.tmeta(r.rewritten, "new"),
+            length_delta_pct=round(delta, 1),
+            keywords=len(r.keywords_used),
+            substitutions=len(r.substitutions),
+            introduced=len(introduced),
+            defensible=r.defensible,
+        )
         # The prompt caps length growth at +/-15% so the mirrored layout does not
         # reflow; a breach means the instruction was ignored and the page may grow.
         if abs(delta) > 15:
-            obs.warn("rewrite.length_breach", op=op, length_delta_pct=round(delta, 1),
-                     request_id=request_id, prompt_file=archived)
+            obs.warn(
+                "rewrite.length_breach",
+                op=op,
+                length_delta_pct=round(delta, 1),
+                request_id=request_id,
+                prompt_file=archived,
+            )
         if max_chars and len(r.rewritten) > max_chars:
-            obs.warn("rewrite.line_budget_breach", op=op, chars=len(r.rewritten),
-                     budget=max_chars, request_id=request_id, prompt_file=archived)
+            obs.warn(
+                "rewrite.line_budget_breach",
+                op=op,
+                chars=len(r.rewritten),
+                budget=max_chars,
+                request_id=request_id,
+                prompt_file=archived,
+            )
         if not r.defensible:
-            obs.warn("rewrite.not_defensible", op=op, introduced=len(introduced),
-                     prompt_file=archived)
+            obs.warn(
+                "rewrite.not_defensible", op=op, introduced=len(introduced), prompt_file=archived
+            )
         return {
             "rewritten": r.rewritten.strip().lstrip("•-–— ").strip(),
             "keywords_used": r.keywords_used,
@@ -250,10 +331,21 @@ class ModelGateway:
         max_chars: int = 0,
     ) -> dict:
         """A new bullet for the slot `bullet` holds, written for `jd_points`."""
-        system, user = bullets.replace_request(self.prompts, bullet, section, entry, siblings,
-                                               jd_points, role, company, extra, max_chars)
-        return await self._run_rewrite("replace", system, user, bullet, jd_points,
-                                       "replace", max_chars)
+        system, user = bullets.replace_request(
+            self.prompts,
+            bullet,
+            section,
+            entry,
+            siblings,
+            jd_points,
+            role,
+            company,
+            extra,
+            max_chars,
+        )
+        return await self._run_rewrite(
+            "replace", system, user, bullet, jd_points, "replace", max_chars
+        )
 
     async def rewrite_many(self, jobs: list[dict], concurrency: int | None = None) -> list[dict]:
         """Rewrite a batch of bullets concurrently, isolating per-bullet failures.
@@ -267,12 +359,18 @@ class ModelGateway:
             except Exception:  # noqa: BLE001 - the per-bullet calls report why
                 concurrency = 1
         sem = asyncio.Semaphore(concurrency)
-        obs.event("rewrite.batch_start", bullets=len(jobs), concurrency=concurrency,
-                  backend=self.registry.current_name(),
-                  mode=(jobs[0]["args"].get("mode") if jobs else None))
+        obs.event(
+            "rewrite.batch_start",
+            bullets=len(jobs),
+            concurrency=concurrency,
+            backend=self.registry.current_name(),
+            mode=(jobs[0]["args"].get("mode") if jobs else None),
+        )
 
         calls: dict[str, Callable[..., Awaitable[dict]]] = {
-            "experience": self.write_experience_bullet, "replace": self.replace_bullet}
+            "experience": self.write_experience_bullet,
+            "replace": self.replace_bullet,
+        }
 
         async def one(job: dict) -> dict:
             fn = calls.get(job.get("kind") or "", self.rewrite_bullet)
@@ -291,8 +389,14 @@ class ModelGateway:
         with obs.timer() as t:
             results = await asyncio.gather(*(one(j) for j in jobs))
         ok = sum(1 for r in results if r.get("ok"))
-        obs.event("rewrite.batch_done", bullets=len(results), ok=ok,
-                  failed=len(results) - ok, ms=t.ms, **obs.totals())
+        obs.event(
+            "rewrite.batch_done",
+            bullets=len(results),
+            ok=ok,
+            failed=len(results) - ok,
+            ms=t.ms,
+            **obs.totals(),
+        )
         return results
 
     async def write_experience_bullet(
@@ -314,9 +418,18 @@ class ModelGateway:
         onto an employer.
         """
         backend = self._backend()
-        system, user = bullets.experience_request(self.prompts, experience, jd_points, role,
-                                                  company, placements, examples, mode, extra,
-                                                  max_chars)
+        system, user = bullets.experience_request(
+            self.prompts,
+            experience,
+            jd_points,
+            role,
+            company,
+            placements,
+            examples,
+            mode,
+            extra,
+            max_chars,
+        )
         with obs.timer() as t:
             out = await backend.complete(
                 model=self.registry.current_model(),
@@ -328,35 +441,60 @@ class ModelGateway:
             )
         r = out.parsed
         archived = obs.archive_prompt(
-            self.log_dir, "experience_bullet", system, user, out.text,
-            {"model": self._used(out), "backend": self.registry.current_name(), "mode": mode,
-             "request_id": out.request_id,
-             "jd_points": [p.get("id") for p in jd_points], **out.meta})
+            self.log_dir,
+            "experience_bullet",
+            system,
+            user,
+            out.text,
+            {
+                "model": self._used(out),
+                "backend": self.registry.current_name(),
+                "mode": mode,
+                "request_id": out.request_id,
+                "jd_points": [p.get("id") for p in jd_points],
+                **out.meta,
+            },
+        )
         if r is None:
-            obs.warn("experience_bullet.unparsable", request_id=out.request_id,
-                     prompt_file=archived)
+            obs.warn(
+                "experience_bullet.unparsable", request_id=out.request_id, prompt_file=archived
+            )
             raise RuntimeError(f"{self.agent()} returned no parsable bullet.")
 
         ids = {p["id"] for p in placements}
         chosen = r.placement.strip()
         if chosen not in ids:
-            heading = (r.new_section.strip()
-                       or bullets.DEFAULT_SECTION.get(experience.get("kind", ""),
-                                                      "ADDITIONAL EXPERIENCE"))
+            heading = r.new_section.strip() or bullets.DEFAULT_SECTION.get(
+                experience.get("kind", ""), "ADDITIONAL EXPERIENCE"
+            )
             chosen = "new:" + heading[:40]
         bullet = r.bullet.strip().lstrip("•-–— ").strip()
         introduced = [x for x in r.substitutions if not x.grounded]
-        obs.record_usage("experience_bullet", self._used(out), out.usage, t.ms, out.request_id,
-                         backend=self.registry.current_name(), mode=mode,
-                         points=len(jd_points),
-                         prompt_file=archived,
-                         **obs.tmeta(experience["text"], "exp"), **obs.tmeta(bullet, "new"),
-                         keywords=len(r.keywords_used), introduced=len(introduced),
-                         defensible=r.defensible,
-                         placement="new" if chosen.startswith("new:") else chosen)
+        obs.record_usage(
+            "experience_bullet",
+            self._used(out),
+            out.usage,
+            t.ms,
+            out.request_id,
+            backend=self.registry.current_name(),
+            mode=mode,
+            points=len(jd_points),
+            prompt_file=archived,
+            **obs.tmeta(experience["text"], "exp"),
+            **obs.tmeta(bullet, "new"),
+            keywords=len(r.keywords_used),
+            introduced=len(introduced),
+            defensible=r.defensible,
+            placement="new" if chosen.startswith("new:") else chosen,
+        )
         if max_chars and len(bullet) > max_chars:
-            obs.warn("rewrite.line_budget_breach", chars=len(bullet), budget=max_chars,
-                     request_id=out.request_id, prompt_file=archived)
+            obs.warn(
+                "rewrite.line_budget_breach",
+                chars=len(bullet),
+                budget=max_chars,
+                request_id=out.request_id,
+                prompt_file=archived,
+            )
         return {
             "rewritten": bullet,
             "keywords_used": r.keywords_used,
@@ -388,16 +526,24 @@ class ModelGateway:
         backend = self._backend()
         system = with_note(outreach.OUTREACH_SYSTEM, extra)
 
-        user = outreach.outreach_prompt(candidate, recruiter, role, company, highlights,
-                                        jd_points, examples)
+        user = outreach.outreach_prompt(
+            candidate, recruiter, role, company, highlights, jd_points, examples
+        )
         n_ex: dict[str, int] = {
             k: min(outreach.OUTREACH_EXAMPLE_LIMIT, sum(e["kind"] == k for e in examples))
-            for k in outreach.OUTREACH_EXAMPLE_KINDS}
-        obs.event("outreach.start", has_recruiter=bool(recruiter.strip()),
-                  highlights=len(highlights), points=len(jd_points),
-                  linkedin_examples=n_ex["linkedin"], email_examples=n_ex["email"],
-                  has_note=bool(extra.strip()), model=self.registry.model_label(),
-                  backend=self.registry.current_name())
+            for k in outreach.OUTREACH_EXAMPLE_KINDS
+        }
+        obs.event(
+            "outreach.start",
+            has_recruiter=bool(recruiter.strip()),
+            highlights=len(highlights),
+            points=len(jd_points),
+            linkedin_examples=n_ex["linkedin"],
+            email_examples=n_ex["email"],
+            has_note=bool(extra.strip()),
+            model=self.registry.model_label(),
+            backend=self.registry.current_name(),
+        )
         with obs.timer() as t:
             out = await backend.complete(
                 model=self.registry.current_model(),
@@ -409,29 +555,49 @@ class ModelGateway:
             )
         o = out.parsed
         archived = obs.archive_prompt(
-            self.log_dir, "outreach", system, user, out.text,
-            {"model": self._used(out), "backend": self.registry.current_name(),
-             "request_id": out.request_id,
-             **out.meta})
+            self.log_dir,
+            "outreach",
+            system,
+            user,
+            out.text,
+            {
+                "model": self._used(out),
+                "backend": self.registry.current_name(),
+                "request_id": out.request_id,
+                **out.meta,
+            },
+        )
         if o is None:
-            obs.warn("outreach.unparsable", request_id=out.request_id,
-                     prompt_file=archived)
+            obs.warn("outreach.unparsable", request_id=out.request_id, prompt_file=archived)
             raise RuntimeError(f"{self.agent()} returned no parsable outreach draft.")
 
         linkedin = o.linkedin.strip()
         li_subject = o.linkedin_subject.strip()
         subject = o.email_subject.strip()
         body = o.email_body.strip()
-        obs.record_usage("outreach", self._used(out), out.usage, t.ms, out.request_id,
-                         backend=self.registry.current_name(), prompt_file=archived,
-                         linkedin_chars=len(linkedin),
-                         **obs.tmeta(linkedin, "li"), **obs.tmeta(body, "email"),
-                         subject_chars=len(subject), li_subject_chars=len(li_subject))
+        obs.record_usage(
+            "outreach",
+            self._used(out),
+            out.usage,
+            t.ms,
+            out.request_id,
+            backend=self.registry.current_name(),
+            prompt_file=archived,
+            linkedin_chars=len(linkedin),
+            **obs.tmeta(linkedin, "li"),
+            **obs.tmeta(body, "email"),
+            subject_chars=len(subject),
+            li_subject_chars=len(li_subject),
+        )
         # Over the limit LinkedIn would cut the note off mid-word. Truncating here
         # would do the same, so surface it instead and let the user trim it.
         if len(linkedin) > outreach.LINKEDIN_LIMIT:
-            obs.warn("outreach.linkedin_too_long", chars=len(linkedin),
-                     limit=outreach.LINKEDIN_LIMIT, prompt_file=archived)
+            obs.warn(
+                "outreach.linkedin_too_long",
+                chars=len(linkedin),
+                limit=outreach.LINKEDIN_LIMIT,
+                prompt_file=archived,
+            )
         return {
             "linkedin": linkedin,
             "linkedin_subject": li_subject,
@@ -462,11 +628,17 @@ class ModelGateway:
         trusted, and layout values come back in the renderer's own units.
         """
         backend = self._backend()
-        user = corrections.chat_prompt(blocks, layout, fit, geometry, role, company, jd_points,
-                                       history, message)
-        obs.event("pdfchat.start", blocks=len(blocks), turns=len(history),
-                  **obs.tmeta(message, "msg"), model=self.registry.model_label(),
-                  backend=self.registry.current_name())
+        user = corrections.chat_prompt(
+            blocks, layout, fit, geometry, role, company, jd_points, history, message
+        )
+        obs.event(
+            "pdfchat.start",
+            blocks=len(blocks),
+            turns=len(history),
+            **obs.tmeta(message, "msg"),
+            model=self.registry.model_label(),
+            backend=self.registry.current_name(),
+        )
         with obs.timer() as t:
             out = await backend.complete(
                 model=self.registry.current_model(),
@@ -478,13 +650,20 @@ class ModelGateway:
             )
         rev = out.parsed
         archived = obs.archive_prompt(
-            self.log_dir, "pdf_chat", corrections.PDF_CHAT_SYSTEM, user, out.text,
-            {"model": self._used(out), "backend": self.registry.current_name(),
-             "request_id": out.request_id,
-             **out.meta})
+            self.log_dir,
+            "pdf_chat",
+            corrections.PDF_CHAT_SYSTEM,
+            user,
+            out.text,
+            {
+                "model": self._used(out),
+                "backend": self.registry.current_name(),
+                "request_id": out.request_id,
+                **out.meta,
+            },
+        )
         if rev is None:
-            obs.warn("pdfchat.unparsable", request_id=out.request_id,
-                     prompt_file=archived)
+            obs.warn("pdfchat.unparsable", request_id=out.request_id, prompt_file=archived)
             raise RuntimeError(f"{self.agent()} returned no parsable answer.")
 
         known = {b["id"]: b for b in blocks}
@@ -497,9 +676,14 @@ class ModelGateway:
                 continue
             if not text or text == known[bid]["text"]:
                 continue
-            edits.append({"block_id": bid, "text": text,
-                          "substitutions": [x.model_dump() for x in e.substitutions],
-                          "defensible": e.defensible})
+            edits.append(
+                {
+                    "block_id": bid,
+                    "text": text,
+                    "substitutions": [x.model_dump() for x in e.substitutions],
+                    "defensible": e.defensible,
+                }
+            )
         changes: dict = {}
         for c in rev.layout:
             key, div = corrections.LAYOUT_SETTINGS[c.setting]
@@ -507,12 +691,18 @@ class ModelGateway:
         if rev.justify != "unchanged":
             changes["justify"] = rev.justify
 
-        obs.record_usage("pdf_chat", self._used(out), out.usage, t.ms, out.request_id,
-                         backend=self.registry.current_name(), prompt_file=archived,
-                         edits=len(edits),
-                         layout=sorted(changes) or None,
-                         introduced=sum(1 for e in edits for x in e["substitutions"]
-                                        if not x["grounded"]))
+        obs.record_usage(
+            "pdf_chat",
+            self._used(out),
+            out.usage,
+            t.ms,
+            out.request_id,
+            backend=self.registry.current_name(),
+            prompt_file=archived,
+            edits=len(edits),
+            layout=sorted(changes) or None,
+            introduced=sum(1 for e in edits for x in e["substitutions"] if not x["grounded"]),
+        )
         if unknown:
             obs.warn("pdfchat.unknown_blocks", ids=unknown, prompt_file=archived)
         return {"reply": rev.reply.strip(), "edits": edits, "layout": changes}

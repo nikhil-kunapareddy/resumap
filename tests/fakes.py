@@ -6,6 +6,7 @@ response schema has a default answer derived from the prompt it was sent; a
 test swaps one in with ``respond()``. Every call is recorded, so a test can
 assert on exactly what was sent.
 """
+
 from __future__ import annotations
 
 import json
@@ -59,23 +60,34 @@ def _tags(system: str, user: str) -> dict:
     return {
         "company": "Contoso",
         "role": "Data Engineer",
-        "tags": [{"id": pid, "category": "requirement",
-                  "keywords": [t for t in TECH_TERMS if t in text] + [INVENTED_TERM]}
-                 for pid, text in points],
+        "tags": [
+            {
+                "id": pid,
+                "category": "requirement",
+                "keywords": [t for t in TECH_TERMS if t in text] + [INVENTED_TERM],
+            }
+            for pid, text in points
+        ],
     }
 
 
 def _rewrite(system: str, user: str) -> dict:
     original = between(user, "original_bullet")
-    if "<other_bullets>" in user:   # claude.replace_request
+    if "<other_bullets>" in user:  # claude.replace_request
         text = REPLACED_TEXT
     else:
         text = tailored(original)
     return {
         "rewritten": text,
         "keywords_used": ["Kafka"],
-        "substitutions": [{"original": "", "replacement": "Kafka", "grounded": False,
-                           "note": "named in the JD point"}],
+        "substitutions": [
+            {
+                "original": "",
+                "replacement": "Kafka",
+                "grounded": False,
+                "note": "named in the JD point",
+            }
+        ],
         "defensible": True,
     }
 
@@ -95,7 +107,7 @@ def _outreach(system: str, user: str) -> dict:
     return {
         "linkedin_subject": "Data Engineer role at Contoso",
         "linkedin": "Hi Sam, I build streaming pipelines in Kafka and Python and would "
-                    "like to talk about the Data Engineer role at Contoso.",
+        "like to talk about the Data Engineer role at Contoso.",
         "email_subject": "Following up on the Data Engineer application",
         "email_body": "Hi Sam,\n\nI applied for the Data Engineer role this week.\n\nJane",
         "highlights_used": ["streaming ingestion pipeline"],
@@ -143,8 +155,9 @@ class FakeBackend(Backend):
     def unavailable(self) -> str | None:
         return self.down
 
-    async def complete(self, *, model: str, system: str, user: str, schema: type,
-                       max_tokens: int, effort: str) -> Completion:
+    async def complete(
+        self, *, model: str, system: str, user: str, schema: type, max_tokens: int, effort: str
+    ) -> Completion:
         self.calls.append(Call(schema.__name__, system, user, model))
         value = self.handlers[schema.__name__](system, user)
         return Completion(

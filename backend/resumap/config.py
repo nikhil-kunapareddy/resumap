@@ -1,4 +1,5 @@
 """Runtime configuration for Resumap."""
+
 from __future__ import annotations
 
 import os

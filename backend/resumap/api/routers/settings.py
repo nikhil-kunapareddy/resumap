@@ -1,4 +1,5 @@
 """Status, the backend choice, the filename prefix and the editable prompts."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -29,8 +30,9 @@ def list_backends(services: ServicesDep) -> BackendsOut:
 
 
 @router.post("/backends/{name}/test")
-async def test_backend(name: str, services: ServicesDep,
-                       body: ModelBody | None = None) -> BackendTestOut:
+async def test_backend(
+    name: str, services: ServicesDep, body: ModelBody | None = None
+) -> BackendTestOut:
     """Make one tiny real call through a backend, without switching to it."""
     return await services.settings.test_backend(name, body.model.strip() if body else "")
 

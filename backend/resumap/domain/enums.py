@@ -9,6 +9,7 @@ their plain values. A status read back from SQLite as "accepted" still matches
 ``RewriteStatus.ACCEPTED``, and a dict keyed by members answers lookups by the
 plain string.
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -27,7 +28,7 @@ class BlockKind(StrEnum):
     NAME = "name"
     CONTACT = "contact"
     SECTION = "section"
-    ENTRY = "entry"       # a role, school or project header, often with a date column
+    ENTRY = "entry"  # a role, school or project header, often with a date column
     BULLET = "bullet"
     PARA = "para"
 
@@ -62,8 +63,8 @@ class RewriteMode(StrEnum):
 class BoxMode(StrEnum):
     """A per-box override of the job's mode, set with the Map step's toggle."""
 
-    INHERIT = ""          # no override: the job's own mode applies
-    REPLACE = "replace"   # write a new bullet for the mapped points
+    INHERIT = ""  # no override: the job's own mode applies
+    REPLACE = "replace"  # write a new bullet for the mapped points
 
 
 class ExperienceKind(StrEnum):

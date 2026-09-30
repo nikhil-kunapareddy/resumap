@@ -1,4 +1,5 @@
 """The messages that ask for recruiter outreach."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -57,7 +58,6 @@ not copy their sentences, and where an example breaks a limit above, the limit
 wins."""
 
 
-
 def _example_lines(examples: list[dict], kind: str) -> list[str]:
     """One tagged block of liked messages of `kind`, or nothing if there are none."""
     picked = [e for e in examples if e["kind"] == kind][:OUTREACH_EXAMPLE_LIMIT]
@@ -73,10 +73,15 @@ def _example_lines(examples: list[dict], kind: str) -> list[str]:
     return lines
 
 
-
-def outreach_prompt(candidate: str, recruiter: str, role: str, company: str,
-                     highlights: list[str], jd_points: list[dict],
-                     examples: Sequence[dict] = ()) -> str:
+def outreach_prompt(
+    candidate: str,
+    recruiter: str,
+    role: str,
+    company: str,
+    highlights: list[str],
+    jd_points: list[dict],
+    examples: Sequence[dict] = (),
+) -> str:
     lines = [
         f"<candidate_name>{candidate or 'unspecified'}</candidate_name>",
         f"<recruiter_name>{recruiter or 'not known'}</recruiter_name>",
@@ -92,4 +97,3 @@ def outreach_prompt(candidate: str, recruiter: str, role: str, company: str,
     for kind in OUTREACH_EXAMPLE_KINDS:
         lines += _example_lines(list(examples), kind)
     return "\n".join(lines)
-

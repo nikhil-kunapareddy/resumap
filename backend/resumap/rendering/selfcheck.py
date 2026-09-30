@@ -1,4 +1,5 @@
 """The export self-check: the defects that actually shipped before, looked for in every PDF."""
+
 from __future__ import annotations
 
 import difflib
@@ -9,8 +10,9 @@ from typing import Any
 from .. import obs
 
 
-def verify_pdf(pdf_path: str | Path, doc: dict[str, Any],
-               source_path: str | None = None) -> dict[str, Any]:
+def verify_pdf(
+    pdf_path: str | Path, doc: dict[str, Any], source_path: str | None = None
+) -> dict[str, Any]:
     """Check the rendered PDF for the defects that actually shipped before.
 
     Each check corresponds to a bug that reached a real export: text running
@@ -34,8 +36,7 @@ def verify_pdf(pdf_path: str | Path, doc: dict[str, Any],
             for c in chars:
                 rows.setdefault(round(c["top"] / 4), []).append(c)
             result["overflow_rows"] = sum(
-                1 for cs in rows.values()
-                if max(c["x1"] for c in cs) > right + 0.6
+                1 for cs in rows.values() if max(c["x1"] for c in cs) > right + 0.6
             )
             result["fonts"] = sorted({c["fontname"].split("+")[-1] for c in chars})
             text = "\n".join(p.extract_text() or "" for p in pdf.pages)
@@ -47,16 +48,18 @@ def verify_pdf(pdf_path: str | Path, doc: dict[str, Any],
         result["dingbat_font"] = any("Dingbat" in f for f in result["fonts"])
 
         if source_path and str(source_path).lower().endswith(".pdf"):
+
             def norm(s: str) -> str:
                 return re.sub(r"\s+", " ", s).strip()
+
             with pdfplumber.open(source_path) as src:
                 original = norm("\n".join(p.extract_text() or "" for p in src.pages))
                 # Counted from the same handle the similarity check already
                 # opens, so it is a PDF source by construction.
-                result["source_links"] = sum(
-                    len(p.hyperlinks or []) for p in src.pages)
+                result["source_links"] = sum(len(p.hyperlinks or []) for p in src.pages)
             result["similarity_pct"] = round(
-                difflib.SequenceMatcher(None, original, norm(text)).ratio() * 100, 1)
+                difflib.SequenceMatcher(None, original, norm(text)).ratio() * 100, 1
+            )
 
         problems = []
         if result["pages"] > 1:
@@ -69,21 +72,30 @@ def verify_pdf(pdf_path: str | Path, doc: dict[str, Any],
             problems.append("dingbat substitution leaves a stray glyph per bullet")
         lost = result.get("source_links", 0) - result["links"]
         if lost > 0:
-            problems.append(
-                f"{lost} of {result['source_links']} source hyperlinks dropped")
+            problems.append(f"{lost} of {result['source_links']} source hyperlinks dropped")
         result["problems"] = problems
         result["ok"] = not problems
 
         if problems:
-            obs.warn("export.selfcheck_failed", problems=problems, **{
-                k: v for k, v in result.items()
-                if k in ("pages", "overflow_rows", "similarity_pct",
-                         "links", "source_links")})
+            obs.warn(
+                "export.selfcheck_failed",
+                problems=problems,
+                **{
+                    k: v
+                    for k, v in result.items()
+                    if k in ("pages", "overflow_rows", "similarity_pct", "links", "source_links")
+                },
+            )
         else:
-            obs.event("export.selfcheck", ok=True, pages=result["pages"],
-                      words=words, links=result["links"],
-                      source_links=result.get("source_links"),
-                      similarity_pct=result.get("similarity_pct"))
+            obs.event(
+                "export.selfcheck",
+                ok=True,
+                pages=result["pages"],
+                words=words,
+                links=result["links"],
+                source_links=result.get("source_links"),
+                similarity_pct=result.get("similarity_pct"),
+            )
     except Exception as exc:  # noqa: BLE001 - never fail an export over a check
         result["ok"] = None
         result["error"] = f"{type(exc).__name__}: {exc}"

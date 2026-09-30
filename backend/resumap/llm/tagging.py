@@ -1,4 +1,5 @@
 """Labelling the points of a job description the parser already split."""
+
 from __future__ import annotations
 
 from .. import obs
@@ -33,14 +34,12 @@ Also return the hiring company and the job title if the posting states them,
 and empty strings if it does not."""
 
 
-
 def tag_prompt(points: list[dict], text: str) -> str:
     lines = [f"<job_description>\n{text}\n</job_description>", "<points>"]
     lines += [f"{p['id']}: {p['text']}" for p in points]
     lines.append("</points>")
     lines.append(f"Return exactly {len(points)} tag entries, one per id above.")
     return "\n".join(lines)
-
 
 
 def apply_tags(points: list[dict], tags: list[JDTag]) -> None:
@@ -73,4 +72,3 @@ def apply_tags(points: list[dict], tags: list[JDTag]) -> None:
         obs.warn("jd.untagged_points", ids=untagged)
     if invented:
         obs.warn("jd.keywords_not_in_point", dropped=invented)
-

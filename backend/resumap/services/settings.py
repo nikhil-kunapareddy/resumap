@@ -1,4 +1,5 @@
 """The settings panel: which backend is live, the filename prefix, prompt edits."""
+
 from __future__ import annotations
 
 import re
@@ -23,8 +24,9 @@ PROMPT_MAX_CHARS = 20000
 
 
 class SettingsService(Service):
-    def __init__(self, store: Store, gateway: ModelGateway, *, default_backend: str,
-                 default_first_name: str) -> None:
+    def __init__(
+        self, store: Store, gateway: ModelGateway, *, default_backend: str, default_first_name: str
+    ) -> None:
         super().__init__(store)
         self.gateway = gateway
         self.default_backend = default_backend
@@ -36,8 +38,9 @@ class SettingsService(Service):
         name = self.store.settings.get("backend", self.default_backend)
         if name not in registry:
             name = self.default_backend
-        registry.select(name, {b: self.store.settings.get(f"model.{b}", "")
-                               for b in registry.names})
+        registry.select(
+            name, {b: self.store.settings.get(f"model.{b}", "") for b in registry.names}
+        )
         self._apply_prompts()
 
     def _apply_prompts(self) -> None:
@@ -67,8 +70,10 @@ class SettingsService(Service):
     def backends(self) -> BackendsOut:
         """Every backend and whether it can run, for the settings panel."""
         registry = self.gateway.registry
-        return BackendsOut(selected=registry.current_name(),
-                           backends=[BackendInfo(**b) for b in registry.describe()])
+        return BackendsOut(
+            selected=registry.current_name(),
+            backends=[BackendInfo(**b) for b in registry.describe()],
+        )
 
     async def test_backend(self, name: str, model: str) -> BackendTestOut:
         """Make one tiny real call through a backend, without switching to it.
@@ -97,17 +102,23 @@ class SettingsService(Service):
         check = await self.gateway.ping(name, model or None)
         if not check["ok"]:
             hint = suggest_model(name, model)
-            obs.warn("settings.backend_rejected", backend=name,
-                     model=model or "default", suggested=hint)
-            raise Invalid(f"Not switched: {check['detail']}"
-                          + (f" Did you mean {hint}?" if hint else ""))
+            obs.warn(
+                "settings.backend_rejected", backend=name, model=model or "default", suggested=hint
+            )
+            raise Invalid(
+                f"Not switched: {check['detail']}" + (f" Did you mean {hint}?" if hint else "")
+            )
         with self.store.transaction():
             self.store.settings.set("backend", name)
             self.store.settings.set(f"model.{name}", model)
         self.gateway.registry.select(name, {name: model})
         out = self.status()
-        obs.event("settings.backend", backend=name,
-                  model=self.gateway.registry.model_label(), ready=out.ready)
+        obs.event(
+            "settings.backend",
+            backend=name,
+            model=self.gateway.registry.model_label(),
+            ready=out.ready,
+        )
         return out
 
     def set_first_name(self, first_name: str) -> SettingsOut:
@@ -136,8 +147,12 @@ class SettingsService(Service):
         else:
             self.store.settings.set(f"prompt.{key}", text)
         self._apply_prompts()
-        obs.event("prompt.saved", key=key, custom=self.gateway.prompts.is_custom(key),
-                  **obs.tmeta(text, "prompt"))
+        obs.event(
+            "prompt.saved",
+            key=key,
+            custom=self.gateway.prompts.is_custom(key),
+            **obs.tmeta(text, "prompt"),
+        )
         return self._prompt_info(key)
 
     def reset_prompt(self, key: str) -> PromptInfo:

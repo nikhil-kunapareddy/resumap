@@ -1,4 +1,5 @@
 """Uploading and reading resumes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, UploadFile
@@ -16,8 +17,9 @@ def resumes(services: ServicesDep) -> list[ResumeSummary]:
 
 
 @router.post("")
-def upload_resume(services: ServicesDep, file: UploadFile = File(...),
-                  label: str = Form("")) -> ResumeOut:
+def upload_resume(
+    services: ServicesDep, file: UploadFile = File(...), label: str = Form("")
+) -> ResumeOut:
     return services.resumes.upload(file.filename, file.file, label)
 
 

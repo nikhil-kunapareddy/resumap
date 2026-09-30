@@ -5,6 +5,7 @@ at runtime, and ``SettingsService`` applies the saved choice at startup. The
 registry is the only holder of that choice, so the gateway reads the live
 backend and model from it at call time.
 """
+
 from __future__ import annotations
 
 import re
@@ -68,12 +69,17 @@ class BackendRegistry:
         out = []
         for name, b in self._backends.items():
             why = b.unavailable()
-            out.append({
-                "name": name, "label": b.label, "ready": why is None, "detail": why,
-                "default_model": b.default_model,
-                "model": (self._models.get(name) or "").strip(),
-                "selected": name == self._selected,
-            })
+            out.append(
+                {
+                    "name": name,
+                    "label": b.label,
+                    "ready": why is None,
+                    "detail": why,
+                    "default_model": b.default_model,
+                    "model": (self._models.get(name) or "").strip(),
+                    "selected": name == self._selected,
+                }
+            )
         return out
 
 

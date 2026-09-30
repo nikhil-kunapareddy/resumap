@@ -1,4 +1,5 @@
 """The message that asks for corrections to the rendered PDF."""
+
 from __future__ import annotations
 
 # --------------------------------------------------------------------------
@@ -68,10 +69,17 @@ Layout:
   shrinks it back. Say so when that is likely."""
 
 
-
-def chat_prompt(blocks: list[dict], layout: dict, fit: dict, geometry: dict,
-                 role: str, company: str, jd_points: list[dict],
-                 history: list[dict], message: str) -> str:
+def chat_prompt(
+    blocks: list[dict],
+    layout: dict,
+    fit: dict,
+    geometry: dict,
+    role: str,
+    company: str,
+    jd_points: list[dict],
+    history: list[dict],
+    message: str,
+) -> str:
     def pct(v: float) -> str:
         return f"{round(v * 100)}%"
 
@@ -80,8 +88,7 @@ def chat_prompt(blocks: list[dict], layout: dict, fit: dict, geometry: dict,
 
     mx, my = layout.get("margin_x"), layout.get("margin_y")
     side = f"{round(mx)}pt" if mx else f"as uploaded ({pt('left')}pt)"
-    vert = (f"{round(my)}pt" if my
-            else f"as uploaded ({pt('top')}pt top, {pt('bottom')}pt bottom)")
+    vert = f"{round(my)}pt" if my else f"as uploaded ({pt('top')}pt top, {pt('bottom')}pt bottom)"
     lines = [
         f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
         "<layout>",
@@ -100,11 +107,15 @@ def chat_prompt(blocks: list[dict], layout: dict, fit: dict, geometry: dict,
         if b.get("section"):
             head += f" in {b['section']}"
         if b.get("new"):
-            head += (f" | NEW, written from the candidate's own notes (its original), "
-                     f"{b['lines']} line(s) now, ~{b['chars_per_line']} chars/line")
+            head += (
+                f" | NEW, written from the candidate's own notes (its original), "
+                f"{b['lines']} line(s) now, ~{b['chars_per_line']} chars/line"
+            )
         elif b["kind"] != "section":
-            head += (f" | {b['lines']} line(s) now, {b['source_lines']} in the original, "
-                     f"~{b['chars_per_line']} chars/line")
+            head += (
+                f" | {b['lines']} line(s) now, {b['source_lines']} in the original, "
+                f"~{b['chars_per_line']} chars/line"
+            )
         if b.get("right"):
             head += f" | right column, not editable: {b['right']}"
         lines.append(head)
@@ -127,4 +138,3 @@ def chat_prompt(blocks: list[dict], layout: dict, fit: dict, geometry: dict,
         lines.append("</conversation_so_far>")
     lines += ["<request>", message, "</request>"]
     return "\n".join(lines)
-

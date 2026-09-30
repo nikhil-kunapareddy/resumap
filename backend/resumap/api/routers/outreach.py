@@ -1,4 +1,5 @@
 """Recruiter outreach, and the liked messages that set its voice."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

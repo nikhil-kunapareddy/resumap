@@ -1,4 +1,5 @@
 """Tailoring: turning mapped boxes into rewrites, and reviewing them."""
+
 from __future__ import annotations
 
 from .. import obs
@@ -17,8 +18,7 @@ class RewriteService(Service):
         super().__init__(store)
         self.gateway = gateway
 
-    async def transform(self, job_id: int, block_ids: list[str] | None,
-                        extra: str) -> TransformOut:
+    async def transform(self, job_id: int, block_ids: list[str] | None, extra: str) -> TransformOut:
         """Rewrite every mapped box, or only `block_ids` for a re-roll.
 
         A box that fails is reported in `results` and keeps whatever rewrite it
@@ -40,9 +40,15 @@ class RewriteService(Service):
         if not jobs_to_run:
             raise Invalid("Nothing to transform. Map at least one resume box to a JD point first.")
 
-        obs.event("transform.start", job_id=job_id, mode=job.mode,
-                  bullets=len(jobs_to_run), replaced=len(replaced), reroll=bool(block_ids),
-                  has_note=bool(extra.strip()))
+        obs.event(
+            "transform.start",
+            job_id=job_id,
+            mode=job.mode,
+            bullets=len(jobs_to_run),
+            replaced=len(replaced),
+            reroll=bool(block_ids),
+            has_note=bool(extra.strip()),
+        )
         results = await self.gateway.rewrite_many(jobs_to_run)
         with self.store.transaction():
             for res in results:
@@ -65,11 +71,18 @@ class RewriteService(Service):
                     original = blocks[bid]["text"]
                     if bid in replaced:
                         meta["replaced"] = True
-                self.store.rewrites.save(job_id, bid, original=original,
-                                         rewritten=res["rewritten"],
-                                         status=RewriteStatus.PENDING, meta=meta)
-        return TransformOut(results=[TransformResult(**r) for r in results],
-                            rewrites=self.store.rewrites.for_job(job_id))
+                self.store.rewrites.save(
+                    job_id,
+                    bid,
+                    original=original,
+                    rewritten=res["rewritten"],
+                    status=RewriteStatus.PENDING,
+                    meta=meta,
+                )
+        return TransformOut(
+            results=[TransformResult(**r) for r in results],
+            rewrites=self.store.rewrites.for_job(job_id),
+        )
 
     def preview(self, job_id: int, block_id: str) -> PromptPreview:
         """The exact system prompt and message Transform would send for one box."""
@@ -81,11 +94,9 @@ class RewriteService(Service):
         call = calls[0]
         kind: PreviewKind = call.get("kind") or "rewrite"
         system, user = self.gateway.request(kind, call["args"])
-        return PromptPreview(block_id=block_id, kind=kind, mode=job.mode, system=system,
-                             user=user)
+        return PromptPreview(block_id=block_id, kind=kind, mode=job.mode, system=system, user=user)
 
-    def _calls(self, job: Job, doc: dict, block_ids: list[str] | None,
-               extra: str) -> list[dict]:
+    def _calls(self, job: Job, doc: dict, block_ids: list[str] | None, extra: str) -> list[dict]:
         """One call per mapped box: the arguments its rewrite will get.
 
         Shared by transform and the prompt preview, so the preview is exactly what
@@ -104,58 +115,71 @@ class RewriteService(Service):
             if not pts:
                 continue
             if bid in exps:
-                out.append({
-                    "block_id": bid,
-                    "kind": "experience",
-                    "args": {
-                        "experience": exps[bid],
-                        "jd_points": pts,
-                        "role": job.role,
-                        "company": job.company,
-                        "placements": placements(doc),
-                        "examples": [b["text"] for b in doc["blocks"] if b["mappable"]][:3],
-                        "mode": job.mode,
-                        "extra": extra,
-                        "max_chars": new_bullet_budget(doc, layout),
-                    },
-                })
+                out.append(
+                    {
+                        "block_id": bid,
+                        "kind": "experience",
+                        "args": {
+                            "experience": exps[bid],
+                            "jd_points": pts,
+                            "role": job.role,
+                            "company": job.company,
+                            "placements": placements(doc),
+                            "examples": [b["text"] for b in doc["blocks"] if b["mappable"]][:3],
+                            "mode": job.mode,
+                            "extra": extra,
+                            "max_chars": new_bullet_budget(doc, layout),
+                        },
+                    }
+                )
             elif bid in blocks and box_modes.get(bid) == "replace":
                 blk = blocks[bid]
                 entry, siblings = entry_context(doc, bid)
-                out.append({
-                    "block_id": bid,
-                    "kind": "replace",
-                    "args": {
-                        "bullet": blk["text"],
-                        "section": blk.get("section", ""),
-                        "entry": entry,
-                        "siblings": siblings,
-                        "jd_points": pts,
-                        "role": job.role,
-                        "company": job.company,
-                        "extra": extra,
-                        "max_chars": budget.get(bid, 0),
-                    },
-                })
+                out.append(
+                    {
+                        "block_id": bid,
+                        "kind": "replace",
+                        "args": {
+                            "bullet": blk["text"],
+                            "section": blk.get("section", ""),
+                            "entry": entry,
+                            "siblings": siblings,
+                            "jd_points": pts,
+                            "role": job.role,
+                            "company": job.company,
+                            "extra": extra,
+                            "max_chars": budget.get(bid, 0),
+                        },
+                    }
+                )
             elif bid in blocks:
                 blk = blocks[bid]
-                out.append({
-                    "block_id": bid,
-                    "args": {
-                        "bullet": blk["text"],
-                        "section": blk.get("section", ""),
-                        "jd_points": pts,
-                        "role": job.role,
-                        "company": job.company,
-                        "mode": job.mode,
-                        "extra": extra,
-                        "max_chars": budget.get(bid, 0),
-                    },
-                })
+                out.append(
+                    {
+                        "block_id": bid,
+                        "args": {
+                            "bullet": blk["text"],
+                            "section": blk.get("section", ""),
+                            "jd_points": pts,
+                            "role": job.role,
+                            "company": job.company,
+                            "mode": job.mode,
+                            "extra": extra,
+                            "max_chars": budget.get(bid, 0),
+                        },
+                    }
+                )
         return out
 
-    def edit(self, job_id: int, block_id: str, *, text: str | None = None,
-             status: RewriteStatus | None = None, placement: str | None = None) -> Rewrite:
+    def edit(
+        self,
+        job_id: int,
+        block_id: str,
+        *,
+        text: str | None = None,
+        status: RewriteStatus | None = None,
+        placement: str | None = None,
+    ) -> Rewrite:
         """Review one rewrite: re-place it, hand-edit it, or change its status."""
         existing = self._rewrite(job_id, block_id)
         meta = stored_meta(existing)
@@ -164,27 +188,52 @@ class RewriteService(Service):
                 job = self.store.jobs.get(job_id)
                 resume = self.store.resumes.get(job.resume_id) if job else None
                 place = placement.strip()
-                anchors = ({p["id"] for p in placements(resume.doc.as_dict())}
-                           if resume else set())
-                if not (place in anchors
-                        or (place.startswith("new:") and 0 < len(place[4:].strip()) <= 40)):
+                anchors = {p["id"] for p in placements(resume.doc.as_dict())} if resume else set()
+                if not (
+                    place in anchors
+                    or (place.startswith("new:") and 0 < len(place[4:].strip()) <= 40)
+                ):
                     raise Invalid(f"Can't place a bullet at '{place}'.")
-                obs.event("review.placement", job_id=job_id, block=block_id,
-                          placement="new" if place.startswith("new:") else place)
+                obs.event(
+                    "review.placement",
+                    job_id=job_id,
+                    block=block_id,
+                    placement="new" if place.startswith("new:") else place,
+                )
                 meta = {**meta, "placement": place, "placement_user": True}
-                self.store.rewrites.save(job_id, block_id, original=existing.original,
-                                         rewritten=existing.rewritten, status=existing.status,
-                                         meta=meta)
+                self.store.rewrites.save(
+                    job_id,
+                    block_id,
+                    original=existing.original,
+                    rewritten=existing.rewritten,
+                    status=existing.status,
+                    meta=meta,
+                )
             if text is not None:
-                obs.event("review.edit", job_id=job_id, block=block_id,
-                          from_status=existing.status, to_status=status or "edited",
-                          **obs.tmeta(text, "edited"))
-                self.store.rewrites.save(job_id, block_id, original=existing.original,
-                                         rewritten=text.strip(),
-                                         status=status or RewriteStatus.EDITED, meta=meta)
+                obs.event(
+                    "review.edit",
+                    job_id=job_id,
+                    block=block_id,
+                    from_status=existing.status,
+                    to_status=status or "edited",
+                    **obs.tmeta(text, "edited"),
+                )
+                self.store.rewrites.save(
+                    job_id,
+                    block_id,
+                    original=existing.original,
+                    rewritten=text.strip(),
+                    status=status or RewriteStatus.EDITED,
+                    meta=meta,
+                )
             elif status is not None:
-                obs.event("review.status", job_id=job_id, block=block_id,
-                          from_status=existing.status, to_status=status)
+                obs.event(
+                    "review.status",
+                    job_id=job_id,
+                    block=block_id,
+                    from_status=existing.status,
+                    to_status=status,
+                )
                 self.store.rewrites.set_status(job_id, block_id, status)
         return self._rewrite(job_id, block_id)
 
