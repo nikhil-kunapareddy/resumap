@@ -1,0 +1,146 @@
+[
+  {
+    "id": "par001",
+    "kind": "para",
+    "section": "",
+    "mappable": false,
+    "reason": "section-excluded",
+    "text": "Jane Doe jane.doe@example.com | (555) 010-0199 | linkedin.com/in/janedoe | Springfield, USA",
+    "right": ""
+  },
+  {
+    "id": "sec002",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "EXPERIENCE",
+    "right": ""
+  },
+  {
+    "id": "ent003",
+    "kind": "entry",
+    "section": "EXPERIENCE",
+    "mappable": false,
+    "reason": "kind=entry",
+    "text": "Senior Data Engineer, Northwind Analytics Jan 2021 - Present",
+    "right": "Jan 2021 - Present"
+  },
+  {
+    "id": "bul004",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Built a streaming ingestion pipeline in Python and Kafka that processed 2 million events per day at 99.9% uptime across three regions.",
+    "right": ""
+  },
+  {
+    "id": "bul005",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Reduced nightly batch runtime by 40% by rewriting Spark jobs and partitioning Parquet tables by date.",
+    "right": ""
+  },
+  {
+    "id": "bul006",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Led a team of 4 engineers to migrate 120 Airflow DAGs from a legacy cluster to managed cloud infrastructure without missing a delivery window. Data Engineer, Contoso Group    Mar 2018 - Dec 2020.",
+    "right": ""
+  },
+  {
+    "id": "bul007",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Designed a dimensional data model in PostgreSQL that cut report query times from 30 seconds to under 3.",
+    "right": ""
+  },
+  {
+    "id": "bul008",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Automated data quality checks with Great Expectations, catching 95% of schema drift before it reached dashboards.",
+    "right": ""
+  },
+  {
+    "id": "sec009",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "PROJECTS",
+    "right": ""
+  },
+  {
+    "id": "par010",
+    "kind": "para",
+    "section": "PROJECTS",
+    "mappable": false,
+    "reason": "para-too-short",
+    "text": "Open Transit Dashboard    2022",
+    "right": ""
+  },
+  {
+    "id": "bul011",
+    "kind": "bullet",
+    "section": "PROJECTS",
+    "mappable": true,
+    "reason": null,
+    "text": "Developed a public dashboard in React and FastAPI that shows real-time bus arrivals to 30,000 monthly users.",
+    "right": ""
+  },
+  {
+    "id": "sec012",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "EDUCATION",
+    "right": ""
+  },
+  {
+    "id": "ent013",
+    "kind": "entry",
+    "section": "EDUCATION",
+    "mappable": false,
+    "reason": "kind=entry",
+    "text": "Example University, B.S. Computer Science 2014 - 2018",
+    "right": "2014 - 2018"
+  },
+  {
+    "id": "sec014",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "SKILLS",
+    "right": ""
+  },
+  {
+    "id": "sec015",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "Languages: Python, SQL, Scala, TypeScript",
+    "right": ""
+  },
+  {
+    "id": "par016",
+    "kind": "para",
+    "section": "Languages: Python, SQL, Scala, TypeScript",
+    "mappable": false,
+    "reason": "para-too-short",
+    "text": "Tools: Kafka, Spark, Airflow, dbt, PostgreSQL, Docker",
+    "right": ""
+  }
+]

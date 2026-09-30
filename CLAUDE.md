@@ -15,17 +15,16 @@ python3 run.py                    # --no-browser to suppress; RESUMAP_PORT=8077 
 
 # dev with reload (the `app` package is only importable from backend/)
 cd backend && ../.venv/bin/uvicorn app.main:app --reload
+
+# tests (once: uv pip install -r backend/requirements-dev.txt)
+.venv/bin/python -m pytest                       # whole suite, ~4s
+.venv/bin/python -m pytest tests/test_render.py -k budget   # one file / name filter
+RESUMAP_UPDATE_GOLDEN=1 .venv/bin/python -m pytest tests/test_resume_parse.py   # re-pin parser snapshots
 ```
 
 When running anything directly rather than through `run.py` (which re-execs itself), invoke `.venv/bin/python`, not `python3`: here `.venv/bin/python` symlinks to a conda interpreter, so a bare `python3` silently picks up the wrong site-packages.
 
-There is no test suite, no linter config and no build step. Verify changes by running the app, or drive the API directly against throwaway storage so the real DB is untouched — set the env vars *before* importing `app.config`, which reads them at import time:
-
-```python
-os.environ["RESUMAP_DATA_DIR"] = tempfile.mkdtemp()
-sys.path.insert(0, "<repo>/backend")
-from fastapi.testclient import TestClient   # then TestClient(app.main.app)
-```
+There is no linter config and no build step. `tests/` is a characterization suite: it pins what the app does today so a refactor can prove it changed nothing. `tests/conftest.py` sets `RESUMAP_DATA_DIR` and friends *before* importing `app.config` (which reads them at import time), points `db.DB_PATH` and the upload/export dirs at a per-test `tmp_path`, and monkeypatches `backends.get` to `tests/fakes.FakeBackend`, a scripted backend with a default answer per response schema (`fake.respond("Rewrite", ...)` to override, `fake.down = "reason"` to make it unavailable, `fake.calls` to see exactly what was sent). No test touches `data/`, your `.env` settings or a real model. The sample resume is fictional and generated in `tests/fixtures/resumes.py` as PDF, DOCX and TXT; `tests/golden/*.json` snapshot how the parser classifies it. Known defects are strict `xfail`s, so fixing one fails the run until its marker is removed.
 
 Diagnostics: `GET /api/debug/parse/{resume_id}` is the block-classification table — every block with its kind, section, flags and the rule that excluded it from being a point (also written to `data/logs/parse/<id>.txt` on upload). `GET /api/debug/usage` gives tokens and cost by operation.
 

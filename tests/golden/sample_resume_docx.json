@@ -1,0 +1,164 @@
+[
+  {
+    "id": "nam001",
+    "kind": "name",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=name",
+    "text": "Jane Doe",
+    "right": ""
+  },
+  {
+    "id": "con002",
+    "kind": "contact",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=contact",
+    "text": "jane.doe@example.com | (555) 010-0199 | linkedin.com/in/janedoe | Springfield, USA",
+    "right": ""
+  },
+  {
+    "id": "sec003",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "EXPERIENCE",
+    "right": ""
+  },
+  {
+    "id": "ent004",
+    "kind": "entry",
+    "section": "EXPERIENCE",
+    "mappable": false,
+    "reason": "kind=entry",
+    "text": "Senior Data Engineer, Northwind Analytics\t Jan 2021 - Present",
+    "right": "Jan 2021 - Present"
+  },
+  {
+    "id": "bul005",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Built a streaming ingestion pipeline in Python and Kafka that processed 2 million events per day at 99.9% uptime across three regions.",
+    "right": ""
+  },
+  {
+    "id": "bul006",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Reduced nightly batch runtime by 40% by rewriting Spark jobs and partitioning Parquet tables by date.",
+    "right": ""
+  },
+  {
+    "id": "bul007",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Led a team of 4 engineers to migrate 120 Airflow DAGs from a legacy cluster to managed cloud infrastructure without missing a delivery window.",
+    "right": ""
+  },
+  {
+    "id": "ent008",
+    "kind": "entry",
+    "section": "EXPERIENCE",
+    "mappable": false,
+    "reason": "kind=entry",
+    "text": "Data Engineer, Contoso Group\t Mar 2018 - Dec 2020",
+    "right": "Mar 2018 - Dec 2020"
+  },
+  {
+    "id": "bul009",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Designed a dimensional data model in PostgreSQL that cut report query times from 30 seconds to under 3.",
+    "right": ""
+  },
+  {
+    "id": "bul010",
+    "kind": "bullet",
+    "section": "EXPERIENCE",
+    "mappable": true,
+    "reason": null,
+    "text": "Automated data quality checks with Great Expectations, catching 95% of schema drift before it reached dashboards.",
+    "right": ""
+  },
+  {
+    "id": "sec011",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "PROJECTS",
+    "right": ""
+  },
+  {
+    "id": "ent012",
+    "kind": "entry",
+    "section": "PROJECTS",
+    "mappable": false,
+    "reason": "kind=entry",
+    "text": "Open Transit Dashboard\t2022",
+    "right": ""
+  },
+  {
+    "id": "bul013",
+    "kind": "bullet",
+    "section": "PROJECTS",
+    "mappable": true,
+    "reason": null,
+    "text": "Developed a public dashboard in React and FastAPI that shows real-time bus arrivals to 30,000 monthly users.",
+    "right": ""
+  },
+  {
+    "id": "sec014",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "EDUCATION",
+    "right": ""
+  },
+  {
+    "id": "ent015",
+    "kind": "entry",
+    "section": "EDUCATION",
+    "mappable": false,
+    "reason": "kind=entry",
+    "text": "Example University, B.S. Computer Science\t 2014 - 2018",
+    "right": "2014 - 2018"
+  },
+  {
+    "id": "sec016",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "SKILLS",
+    "right": ""
+  },
+  {
+    "id": "sec017",
+    "kind": "section",
+    "section": "",
+    "mappable": false,
+    "reason": "kind=section",
+    "text": "Languages: Python, SQL, Scala, TypeScript",
+    "right": ""
+  },
+  {
+    "id": "par018",
+    "kind": "para",
+    "section": "Languages: Python, SQL, Scala, TypeScript",
+    "mappable": false,
+    "reason": "para-too-short",
+    "text": "Tools: Kafka, Spark, Airflow, dbt, PostgreSQL, Docker",
+    "right": ""
+  }
+]

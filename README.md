@@ -267,6 +267,7 @@ backend/
       jd.py               heuristic JD splitter (fallback when no backend works)
 frontend/                 browser UI (vanilla JS, no build step)
   index.html  app.js  styles.css
+tests/                    pytest suite: fake backend, generated sample resume
 data/                     SQLite db, uploads, exports  (gitignored)
 .env                      backend choice, model, overrides
 ```
@@ -347,6 +348,21 @@ The export self-check is the automated form of the checks that caught the
 shipped defects described above — a spaceless text layer, 22 rows past the right
 margin, a dingbat substitution putting a stray `l` at the head of every bullet.
 It runs on every export and warns rather than silently passing.
+
+## Tests
+
+```bash
+uv pip install -r backend/requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+The suite runs in a few seconds and never touches `data/`, your `.env` settings
+or a real model: every model call goes to a scripted fake backend, and the
+sample resume is a fictional one generated as PDF, DOCX and TXT. Parser output
+is pinned in `tests/golden/`; after an intended change to how resumes are
+classified, re-pin it with `RESUMAP_UPDATE_GOLDEN=1 .venv/bin/python -m pytest
+tests/test_resume_parse.py` and review the diff. Known defects are marked as
+strict expected failures, so fixing one fails the run until the marker goes.
 
 ## Notes
 
