@@ -44,6 +44,9 @@ class StatusOut(Envelope):
     detail: str | None = Field(description="Why the backend cannot run; null when it can.")
     model: str
     first_name: str
+    can_quit: bool = Field(
+        default=False, description="Whether POST /api/quit can stop this server."
+    )
 
 
 class BackendInfo(Envelope):
@@ -54,6 +57,11 @@ class BackendInfo(Envelope):
     default_model: str
     model: str
     selected: bool
+    accepts_key: bool = Field(description="Whether an API key can be saved for this backend.")
+    key_source: Literal["settings", "environment"] | None = Field(
+        description="Where its key comes from; null when there is none. The key itself is "
+        "never returned."
+    )
 
 
 class BackendsOut(Envelope):

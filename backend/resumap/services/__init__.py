@@ -16,6 +16,7 @@ from ..storage import Store
 from .corrections import CorrectionService
 from .exports import ExportService
 from .jobs import JobService
+from .lifecycle import LifecycleService
 from .outreach import OutreachService
 from .resumes import ExperienceService, ResumeService
 from .rewrites import RewriteService
@@ -27,6 +28,7 @@ class Services:
     store: Store
     gateway: ModelGateway
     paths: Paths
+    lifecycle: LifecycleService
     settings: SettingsService
     resumes: ResumeService
     experiences: ExperienceService
@@ -46,14 +48,20 @@ class Services:
         default_backend: str,
         default_first_name: str,
     ) -> Services:
+        lifecycle = LifecycleService()
         settings = SettingsService(
-            store, gateway, default_backend=default_backend, default_first_name=default_first_name
+            store,
+            gateway,
+            lifecycle,
+            default_backend=default_backend,
+            default_first_name=default_first_name,
         )
         exports = ExportService(store, paths, settings)
         return cls(
             store=store,
             gateway=gateway,
             paths=paths,
+            lifecycle=lifecycle,
             settings=settings,
             resumes=ResumeService(store, paths),
             experiences=ExperienceService(store),
@@ -71,6 +79,7 @@ __all__ = [
     "ExperienceService",
     "ExportService",
     "JobService",
+    "LifecycleService",
     "OutreachService",
     "ResumeService",
     "RewriteService",

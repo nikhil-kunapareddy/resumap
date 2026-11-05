@@ -2,9 +2,10 @@
 
     api  ->  services  ->  llm, storage, rendering, parsing  ->  domain
 
-``main`` is the composition root and may import anything. Only ``api`` and
-``main`` know about HTTP. A new import that crosses a line fails here, so the
-structure cannot erode one convenient shortcut at a time.
+``main`` is the composition root and ``launcher`` starts it; both may import
+anything. Only ``api`` and ``main`` know about HTTP. A new import that crosses
+a line fails here, so the structure cannot erode one convenient shortcut at a
+time.
 """
 
 from __future__ import annotations
@@ -72,5 +73,5 @@ def test_imports_respect_the_layers(path):
 
 def test_every_package_is_covered():
     """A new top-level package needs a line in ALLOWED before it can land."""
-    packages = {_package(p) for p in APP.rglob("*.py")} - {"__init__", "main"}
+    packages = {_package(p) for p in APP.rglob("*.py")} - {"__init__", "main", "launcher"}
     assert packages <= set(ALLOWED), sorted(packages - set(ALLOWED))

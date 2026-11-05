@@ -25,6 +25,7 @@ h3{font-size:13px;margin:22px 0 8px;color:var(--mute);text-transform:uppercase;l
 .hint{color:var(--mute);font-size:12.5px;margin:0 0 12px}
 .count{color:var(--mute);font-weight:400;font-size:12.5px}
 .hidden{display:none !important}
+.stopped{max-width:480px;margin:20vh auto 0;padding:0 16px;text-align:center}
 
 /* ── top bar ───────────────────────────────────────────── */
 .topbar{

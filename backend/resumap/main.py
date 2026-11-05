@@ -20,7 +20,6 @@ from .api.routers import ALL as ROUTERS
 from .api.schemas import ErrorOut
 from .config import (
     BACKEND,
-    BASE_DIR,
     CLAUDE_CLI,
     CODEX_CLI,
     DEFAULT_FIRST_NAME,
@@ -29,6 +28,7 @@ from .config import (
     LOG_LEVEL,
     MODEL,
     PI_CLI,
+    WORK_DIR,
     Paths,
     api_key,
 )
@@ -114,7 +114,7 @@ def create_app(paths: Paths | None = None, registry: BackendRegistry | None = No
         codex_cli=CODEX_CLI,
         pi_cli=PI_CLI,
         dotenv_keys=DOTENV_KEYS,
-        cwd=BASE_DIR,
+        cwd=WORK_DIR,
     )
     gateway = ModelGateway(registry, PromptStore(), paths.logs)
     services = Services.build(

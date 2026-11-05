@@ -161,6 +161,20 @@ function renderStatus() {
   b.className = 'badge ' + (S.status.ready ? 'ok' : 'bad');
   b.title = S.status.detail || '';
   $('#modelBadge').textContent = S.status.model;
+  $('#quitApp').classList.toggle('hidden', !S.status.can_quit);
+}
+
+/** Stop the server (the packaged app has no terminal), then say so in place of the UI. */
+async function quitApp() {
+  if (!confirm('Quit Resumap? Everything is already saved. Open the app again to come back.')) return;
+  try {
+    await api('/api/quit', { method: 'POST' });
+  } catch (e) { toast(e.message, 'err'); return; }
+  document.body.innerHTML = `
+    <div class="stopped">
+      <h2>Resumap has stopped</h2>
+      <p class="hint">You can close this tab. Open Resumap again to pick up where you left off.</p>
+    </div>`;
 }
 
 /** What to call the live backend in a busy label or a prompt. */
@@ -176,7 +190,7 @@ const BACKEND_NOTES = {
   claude_code: 'Your local Claude Code install and its sign-in, usually a Claude subscription.',
   codex: 'The OpenAI Codex CLI, signed in with `codex login`, usually a ChatGPT plan.',
   pi: 'The pi coding agent, with whichever provider and model pi is set up for.',
-  api: 'The Anthropic API, with ANTHROPIC_API_KEY from .env. Billed per token.',
+  api: 'The Anthropic API, with your own API key. Billed per token.',
 };
 const MODEL_HINTS = {
   claude_code: 'e.g. claude-opus-5',
@@ -227,6 +241,9 @@ function pendingBackend() {
  */
 async function dismissSettings() {
   if (S.savingSettings) return;
+  // Esc leaves without blurring the key field, so its change event never fires.
+  if ($('#backendKey').value.trim()) S.keySave = saveKey($('#backendKey').value);
+  if (S.keySave) await S.keySave;
   if (!pendingBackend() || S.discardSettings) {
     S.discardSettings = false;
     closeSettings();
@@ -264,9 +281,44 @@ function renderBackends() {
   $('#backendModel').value = b ? b.model : '';
   $('#backendModel').placeholder = b ? (b.default_model || 'CLI default') : '';
   $('#modelHint').textContent = MODEL_HINTS[S.pick] ? `(${MODEL_HINTS[S.pick]})` : '';
+  renderKeyField(b);
+}
+
+/** The API key field, for a backend that takes one. The key is never sent back. */
+function renderKeyField(b) {
+  const takesKey = !!b?.accepts_key;
+  $('#keyField').classList.toggle('hidden', !takesKey);
+  $('#removeKey').classList.toggle('hidden', !takesKey || b.key_source !== 'settings');
+  if (!takesKey) return;
+  const [placeholder, hint] = {
+    settings: ['Saved. Paste a new key to replace it', '(saved on this computer)'],
+    environment: ['Using ANTHROPIC_API_KEY from .env or the shell', '(a key pasted here wins over it)'],
+  }[b.key_source] || ['sk-ant-…', '(from console.anthropic.com; saved on this computer only)'];
+  $('#backendKey').placeholder = placeholder;
+  $('#keyHint').textContent = hint;
+}
+
+/** Save (or, given '', remove) the picked backend's key. Resolves true on success. */
+async function saveKey(raw) {
+  const key = raw.trim();
+  $('#backendKey').value = '';
+  try {
+    const r = await api(`/api/backends/${S.pick}/key`, { method: 'PUT', body: JSON.stringify({ key }) });
+    S.backends = r.backends;
+    S.discardSettings = false;
+    renderBackends();
+    setMsg('#backendMsg', key ? 'Key saved. Press Test to check it can answer.' : 'Saved key removed.', 'ok');
+    return true;
+  } catch (e) {
+    setMsg('#backendMsg', e.message, 'err');
+    return false;
+  } finally {
+    S.keySave = null;
+  }
 }
 
 async function saveBackend(btn) {
+  if (S.keySave) await S.keySave;
   // The server tests the choice with one real call before switching to it.
   busy(btn, true, 'Checking…');
   try {
@@ -290,6 +342,7 @@ async function saveBackend(btn) {
 }
 
 async function testBackend(btn) {
+  if (S.keySave) await S.keySave;
   busy(btn, true, 'Testing…');
   setMsg('#backendMsg', '');
   try {
@@ -1256,6 +1309,11 @@ $('#openSettings').addEventListener('click', openSettings);
 $('#closeSettings').addEventListener('click', dismissSettings);
 $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') dismissSettings(); });
 $('#backendModel').addEventListener('input', () => { S.discardSettings = false; });
+$('#backendKey').addEventListener('change', (e) => {
+  if (e.target.value.trim()) S.keySave = saveKey(e.target.value);
+});
+$('#removeKey').addEventListener('click', () => { S.keySave = saveKey(''); });
+$('#quitApp').addEventListener('click', quitApp);
 $('#reloadStep').addEventListener('click', (e) => reloadStep(e.currentTarget));
 $('#viewPrompt').addEventListener('click', openPrompt);
 $('#closePrompt').addEventListener('click', closePrompt);

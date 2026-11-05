@@ -33,6 +33,7 @@
     <span class="model" id="modelBadge"></span>
     <button id="reloadStep" class="gear" title="Reload this step from the server">&#8635; Reload</button>
     <button id="openSettings" class="gear" title="Model backend and theme" aria-haspopup="dialog">&#9881; Settings</button>
+    <button id="quitApp" class="gear hidden" title="Stop Resumap. Everything is already saved.">Quit</button>
   </div>
 </header>
 
@@ -51,6 +52,10 @@
     <label class="field" style="margin-top:6px"><span>Model <em id="modelHint"></em></span>
       <input id="backendModel" spellcheck="false" autocomplete="off">
     </label>
+    <label class="field hidden" id="keyField" style="margin-top:6px"><span>API key <em id="keyHint"></em></span>
+      <input id="backendKey" type="password" spellcheck="false" autocomplete="off">
+    </label>
+    <button id="removeKey" class="tiny hidden" style="margin-top:4px">Remove saved key</button>
     <div class="actions" style="margin-top:10px">
       <button id="testBackend" title="Makes one tiny real call with the model above">Test</button>
       <div class="grow"></div>

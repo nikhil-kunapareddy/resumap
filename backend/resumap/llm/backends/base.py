@@ -61,9 +61,19 @@ class Backend(ABC):
     name: ClassVar[str]
     label: ClassVar[str]
     concurrency: ClassVar[int] = 1
+    # Whether the settings panel offers an API key field for this backend.
+    accepts_key: ClassVar[bool] = False
 
     def __init__(self, default_model: str = "") -> None:
         self.default_model = default_model
+
+    def set_key(self, key: str | None) -> None:  # noqa: B027 - optional, a no-op by default
+        """A key saved in the settings panel; None falls back to the environment.
+        Ignored by backends that sign in some other way."""
+
+    def key_source(self) -> Literal["settings", "environment"] | None:
+        """Where this backend's key comes from, or None if it has none (or needs none)."""
+        return None
 
     @abstractmethod
     def unavailable(self) -> str | None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import anthropic
 from pydantic import BaseModel
@@ -17,21 +17,36 @@ class AnthropicApiBackend(Backend):
     # Plain HTTP requests, so the ceiling is the account's rate limit rather
     # than anything local.
     concurrency = 4
+    accepts_key = True
 
     def __init__(self, default_model: str, api_key: Callable[[], str | None]) -> None:
         """`default_model` is Resumap's own choice (RESUMAP_MODEL), overridable in
-        the settings panel. `api_key` is read at call time, so a key added to the
-        environment later is picked up."""
+        the settings panel. `api_key` (the environment's ANTHROPIC_API_KEY) is
+        read at call time, so a key added to the environment later is picked
+        up; a key saved in the settings panel wins over it."""
         super().__init__(default_model)
         self._api_key = api_key
+        self._saved_key: str | None = None
+
+    def set_key(self, key: str | None) -> None:
+        # Held here only, never put in os.environ, so no CLI backend's
+        # subprocess can inherit it and bill it.
+        self._saved_key = (key or "").strip() or None
+
+    def key_source(self) -> Literal["settings", "environment"] | None:
+        if self._saved_key:
+            return "settings"
+        return "environment" if self._api_key() else None
+
+    def _key(self) -> str | None:
+        return self._saved_key or self._api_key()
 
     def unavailable(self) -> str | None:
-        if self._api_key() is None:
+        if self._key() is None:
             return (
-                "No ANTHROPIC_API_KEY found. Add it to the .env file in the "
-                "project root, then restart the app. To bill a Claude "
-                "subscription through your local Claude Code install instead, "
-                "set RESUMAP_BACKEND=claude_code."
+                "No API key yet. Paste one into the API key field in Settings, "
+                "or set ANTHROPIC_API_KEY in .env. To use a Claude subscription "
+                "through your local Claude Code install instead, choose Claude Code."
             )
         return None
 
@@ -53,7 +68,7 @@ class AnthropicApiBackend(Backend):
         max_tokens: int,
         effort: Effort,
     ) -> Completion:
-        client = anthropic.AsyncAnthropic(api_key=self._api_key(), max_retries=3)
+        client = anthropic.AsyncAnthropic(api_key=self._key(), max_retries=3)
         resp = await client.messages.parse(
             model=model,
             max_tokens=max_tokens,
