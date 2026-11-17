@@ -19,6 +19,7 @@ from resumap.config import user_data_dir
 from resumap.llm import BackendRegistry
 from resumap.llm.backends import NAMES, AnthropicApiBackend
 from resumap.main import create_app
+from tests.conftest import LOCAL
 
 KEY = "sk-ant-test-0123456789"
 
@@ -40,7 +41,7 @@ def api_row(client) -> dict:
 
 
 def test_an_api_key_saved_in_settings_makes_the_api_backend_ready(paths, fake, store):
-    with TestClient(create_app(paths, keyed_registry(fake))) as client:
+    with TestClient(create_app(paths, keyed_registry(fake)), base_url=LOCAL) as client:
         row = api_row(client)
         assert (row["accepts_key"], row["key_source"], row["ready"]) == (True, None, False)
         assert "Settings" in row["detail"]
@@ -55,7 +56,7 @@ def test_an_api_key_saved_in_settings_makes_the_api_backend_ready(paths, fake, s
         assert KEY not in os.environ.values()
 
     # A restart puts it back live.
-    with TestClient(create_app(paths, keyed_registry(fake))) as client:
+    with TestClient(create_app(paths, keyed_registry(fake)), base_url=LOCAL) as client:
         assert api_row(client)["key_source"] == "settings"
 
         r = client.put("/api/backends/api/key", json={"key": ""})
@@ -72,7 +73,7 @@ def test_a_backend_that_signs_in_on_its_own_takes_no_key(client):
 
 
 def test_a_key_with_spaces_in_it_is_rejected(paths, fake):
-    with TestClient(create_app(paths, keyed_registry(fake))) as client:
+    with TestClient(create_app(paths, keyed_registry(fake)), base_url=LOCAL) as client:
         r = client.put("/api/backends/api/key", json={"key": "sk-ant two words"})
         assert r.status_code == 400
         assert api_row(client)["key_source"] is None
@@ -90,7 +91,7 @@ def test_quit_calls_the_stop_it_was_given(paths, registry):
     app = create_app(paths, registry)
     stopped: list[bool] = []
     app.state.services.lifecycle.allow_quit(lambda: stopped.append(True))
-    with TestClient(app) as client:
+    with TestClient(app, base_url=LOCAL) as client:
         assert client.get("/api/status").json()["can_quit"] is True
         r = client.post("/api/quit")
         assert (r.status_code, r.json(), stopped) == (200, {"ok": True}, [True])

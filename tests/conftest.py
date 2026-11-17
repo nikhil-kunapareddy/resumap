@@ -39,6 +39,10 @@ from resumap.storage import Database, Store  # noqa: E402
 from tests.fakes import FakeBackend  # noqa: E402
 from tests.fixtures import resumes  # noqa: E402
 
+# The API answers only requests addressed to this machine (api/guard.py), so
+# test clients use a loopback base URL rather than TestClient's "testserver".
+LOCAL = "http://127.0.0.1"
+
 
 @pytest.fixture(scope="session")
 def resume_files(tmp_path_factory) -> dict[str, Path]:
@@ -84,7 +88,7 @@ def registry(fake) -> BackendRegistry:
 
 @pytest.fixture
 def client(paths, registry):
-    with TestClient(create_app(paths, registry)) as c:
+    with TestClient(create_app(paths, registry), base_url=LOCAL) as c:
         yield c
 
 

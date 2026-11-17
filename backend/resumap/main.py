@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from . import obs
-from .api import errors
+from .api import errors, guard
 from .api.routers import ALL as ROUTERS
 from .api.schemas import ErrorOut
 from .config import (
@@ -25,6 +25,7 @@ from .config import (
     DEFAULT_FIRST_NAME,
     DOTENV_KEYS,
     FRONTEND_DIR,
+    HOST,
     LOG_LEVEL,
     MODEL,
     PI_CLI,
@@ -133,6 +134,8 @@ def create_app(paths: Paths | None = None, registry: BackendRegistry | None = No
         responses={422: {"model": ErrorOut, "description": "Invalid request"}},
     )
     app.state.services = services
+    # Installed before the request log, which is outermost, so refusals are logged too.
+    guard.install(app, guard.trusted_hosts(HOST))
     app.middleware("http")(_log_requests)
     errors.install(app)
     for router in ROUTERS:
