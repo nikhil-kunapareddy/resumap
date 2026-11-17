@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .. import obs
+from ..config import Paths
 from ..domain import BoxMode, JobSummary, RewriteMode
 from ..llm import ModelGateway
 from ..storage import Store
@@ -13,9 +14,10 @@ from .resumes import resume_out
 
 
 class JobService(Service):
-    def __init__(self, store: Store, gateway: ModelGateway) -> None:
+    def __init__(self, store: Store, gateway: ModelGateway, paths: Paths) -> None:
         super().__init__(store)
         self.gateway = gateway
+        self.paths = paths
 
     def all(self, resume_id: int | None = None) -> list[JobSummary]:
         return self.store.jobs.all(resume_id)
@@ -83,6 +85,8 @@ class JobService(Service):
 
     def delete(self, job_id: int) -> Ok:
         self.store.jobs.delete(job_id)
+        # The preview is a rendered, tailored resume; it goes with its job.
+        self.paths.preview(job_id).unlink(missing_ok=True)
         return Ok()
 
     def keep_points(self, job_id: int, keep_ids: list[str]) -> PointsKept:

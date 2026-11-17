@@ -102,3 +102,11 @@ class Paths:
     def ensure(self) -> None:
         for d in (self.db.parent, self.uploads, self.exports, self.logs):
             d.mkdir(parents=True, exist_ok=True)
+
+    def preview(self, job_id: int) -> Path:
+        """A job's preview PDF, rendered afresh whenever the Export step shows it."""
+        return self.exports / f"_preview_{job_id}.pdf"
+
+    def parse_report(self, resume_id: int) -> Path:
+        """The block-classification table written when a resume is uploaded."""
+        return self.logs / "parse" / f"{resume_id}.txt"

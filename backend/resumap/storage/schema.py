@@ -113,6 +113,11 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Lookups and cascades by parent id that no primary key already covers: a
+-- resume's jobs (the resume list counts them), and a job's chat in order.
+CREATE INDEX IF NOT EXISTS idx_jobs_resume ON jobs(resume_id);
+CREATE INDEX IF NOT EXISTS idx_chat_job ON chat(job_id, id);
 """
 
 

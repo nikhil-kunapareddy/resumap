@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 import shutil
 import time
 from pathlib import Path
@@ -53,7 +54,8 @@ class ResumeService(Service):
 
         self.paths.ensure()
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename or "resume").name)
-        stored = self.paths.uploads / f"{int(time.time())}_{safe}"
+        # The random part keeps two uploads of one name in the same second apart.
+        stored = self.paths.uploads / f"{int(time.time())}_{secrets.token_hex(4)}_{safe}"
         with stored.open("wb") as out:
             shutil.copyfileobj(content, out)
 
@@ -89,9 +91,20 @@ class ResumeService(Service):
         return resume_out(resume)
 
     def delete(self, resume_id: int) -> Ok:
+        """Delete a resume, its jobs (by cascade) and every file they left behind.
+
+        The rows go first, so a delete that fails leaves a resume that still
+        renders rather than one whose source file is gone.
+        """
         resume = self._resume(resume_id)
-        Path(resume.stored_path).unlink(missing_ok=True)
+        job_ids = [j.id for j in self.store.jobs.all(resume_id)]
         self.store.resumes.delete(resume_id)
+        for path in (
+            Path(resume.stored_path),
+            self.paths.parse_report(resume_id),
+            *(self.paths.preview(j) for j in job_ids),
+        ):
+            path.unlink(missing_ok=True)
         return Ok()
 
     def parse_report(self, resume_id: int) -> str:

@@ -65,7 +65,7 @@ class Services:
             settings=settings,
             resumes=ResumeService(store, paths),
             experiences=ExperienceService(store),
-            jobs=JobService(store, gateway),
+            jobs=JobService(store, gateway, paths),
             rewrites=RewriteService(store, gateway),
             exports=exports,
             corrections=CorrectionService(store, gateway, exports),

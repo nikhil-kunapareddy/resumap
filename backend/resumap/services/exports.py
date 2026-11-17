@@ -31,7 +31,7 @@ class ExportService(Service):
         rewrites = self.store.rewrites.for_job(job_id)
         name = export_filename(self.settings.first_name(), job.company or "company")
         self.paths.ensure()
-        out = self.paths.exports / (f"_preview_{job_id}.pdf" if preview else name)
+        out = self.paths.preview(job_id) if preview else self.paths.exports / name
         fit = render_resume(
             render_doc(resume.doc.as_dict(), rewrites),
             str(out),
