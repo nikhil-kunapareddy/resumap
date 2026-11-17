@@ -2,7 +2,8 @@
 # Open a built disk image and check the app inside it works: it is signed, it
 # starts, serves the page, parses a resume, exports a one-page PDF that passes
 # its own self-check (which is what notices a font missing from the bundle),
-# and quits when asked. What someone double-clicking it gets, short of the
+# reads that PDF back in as a resume (which needs the whole PDF stack), and
+# quits when asked. What someone double-clicking it gets, short of the
 # browser window.
 #
 # usage: packaging/smoke_test.sh dist/Resumap-<version>-macos-<arch>.dmg
@@ -63,10 +64,17 @@ resume=$(curl -fsS -F "file=@$home/resume.txt" -F "label=Smoke test" "$base/api/
   fail "uploading a resume failed"
 job=$(curl -fsS -H 'Content-Type: application/json' "$base/api/jobs" -d "{\"resume_id\": $resume, \"text\": \"Data Engineer\\n- Build streaming pipelines with Kafka and Python.\\n- Tune Spark batch jobs for cost and speed.\\n- Orchestrate workflows with Airflow.\"}" | json 'd["id"]') ||
   fail "parsing a job description failed"
-check=$(curl -fsS -X POST "$base/api/jobs/$job/export" | json '"pages=%s ok=%s problems=%s" % (d["pages"], d["check"]["ok"], d["check"]["problems"])') ||
-  fail "exporting the PDF failed"
+export=$(curl -fsS -X POST "$base/api/jobs/$job/export") || fail "exporting the PDF failed"
+check=$(echo "$export" | json '"pages=%s ok=%s problems=%s" % (d["pages"], d["check"]["ok"], d["check"]["problems"])')
 [ "$check" = "pages=1 ok=True problems=[]" ] || fail "the exported PDF failed its self-check: $check"
 echo "ok   resume parsed, PDF exported, self-check clean ($check)"
+
+name=$(echo "$export" | json 'd["filename"]')
+curl -fsS -o "$home/exported.pdf" "$base/api/download/$name" || fail "downloading the export failed"
+points=$(curl -fsS -F "file=@$home/exported.pdf" -F "label=Round trip" "$base/api/resumes" |
+  json 'sum(1 for b in d["blocks"] if b["mappable"])') || fail "the app could not read a PDF resume"
+[ "$points" -ge 3 ] || fail "the exported PDF read back with $points points, expected 3"
+echo "ok   PDF resume read back ($points points)"
 
 curl -fsS -o /dev/null -X POST "$base/api/quit" || fail "Quit was refused"
 for _ in $(seq 1 20); do

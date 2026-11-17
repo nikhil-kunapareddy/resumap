@@ -15,6 +15,17 @@ if find "$app" -type f -name claude -size +10M | grep -q .; then
   exit 1
 fi
 
+# cryptography (which pdfminer needs to open a PDF at all) must carry its own
+# OpenSSL, as its published wheels do. One built from source against a shared
+# libssl gets that dylib bundled beside it, and a mismatched copy broke every
+# PDF in an Intel build.
+rust=$(find "$app" -path '*cryptography/hazmat/bindings/_rust*.so' | head -1)
+if [ -n "$rust" ] && otool -L "$rust" | grep -q 'libssl'; then
+  echo "error: cryptography links a shared libssl; build it with OPENSSL_STATIC=1" >&2
+  otool -L "$rust" >&2
+  exit 1
+fi
+
 # Apple Silicon refuses to run code with no signature at all, so sign the
 # whole bundle ad hoc. This is not a Developer ID signature: people still
 # confirm the first open (README, "Install the app").
