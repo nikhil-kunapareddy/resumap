@@ -79,5 +79,30 @@ until you remove its marker, which is the point: the fix gets noticed.
 * Add or update a test for any behaviour you change.
 * Keep CI green: tests, `ruff format`, `ruff check` and mypy.
 
+## Releasing
+
+`.github/workflows/release.yml` builds the double-click app on GitHub's macOS
+runners, for Apple Silicon (`macos-15`) and Intel (`macos-15-intel`). Each
+disk image is smoke-tested (`packaging/smoke_test.sh`: it mounts the image,
+starts the app inside it, exports a PDF and quits it) before anything is
+published. A pull request that touches the build runs the same jobs and keeps
+the images as workflow artifacts, so a packaging change is tried before it
+merges.
+
+To publish a release:
+
+1. Bump `version` in `pyproject.toml` (and run `uv lock`), and merge that to
+   `main`.
+2. Tag it and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The tag must match the version, or the build stops before it starts. The
+release gets both `.dmg` files, both `.zip` files, `SHA256SUMS.txt`, the
+install steps from `packaging/release_notes.md` and notes generated from the
+merged pull requests.
+
+The app is signed ad hoc, not with an Apple Developer ID, so people confirm
+the first open once (README, "Install the app"). Signing and notarizing it
+needs an Apple Developer account and its certificate in the repo's secrets.
+
 By contributing you agree that your work is released under the
 [MIT License](LICENSE).

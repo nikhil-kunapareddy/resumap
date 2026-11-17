@@ -22,8 +22,11 @@ cd backend && ../.venv/bin/uvicorn resumap.main:app --reload
 .venv/bin/ruff format && .venv/bin/ruff check && .venv/bin/mypy   # format, lint, types
 RESUMAP_UPDATE_GOLDEN=1 .venv/bin/python -m pytest tests/test_resume_parse.py   # re-pin parser snapshots
 
-# the double-click app (macOS): dist/Resumap.app and dist/Resumap-<version>-macos-<arch>.zip
+# the double-click app (macOS): dist/Resumap.app and dist/Resumap-<version>-macos-<arch>.{dmg,zip}
 ./packaging/build_macos.sh
+./packaging/smoke_test.sh dist/Resumap-<version>-macos-<arch>.dmg   # mount, launch, export, quit
+# releases: push a tag matching pyproject's version (v0.2.0); .github/workflows/release.yml
+# builds arm64 + x86_64 on GitHub's macOS runners and publishes the .dmg files
 ```
 
 When running anything directly rather than through `run.py` (which re-execs itself), invoke `.venv/bin/python`, not `python3`: here `.venv/bin/python` symlinks to a conda interpreter, so a bare `python3` silently picks up the wrong site-packages.

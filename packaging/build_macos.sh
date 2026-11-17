@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build dist/Resumap.app and the zip to hand out: dist/Resumap-<version>-macos-<arch>.zip.
+# Build dist/Resumap.app and what to hand out: dist/Resumap-<version>-macos-<arch>.dmg
+# (drag to Applications) and the same app as a .zip.
 # Runs on macOS, for the architecture of the Mac it runs on.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -33,6 +34,24 @@ zip="dist/Resumap-${version}-macos-$(uname -m).zip"
 rm -f "$zip"
 # ditto, not zip: it keeps the bundle's symlinks and signature intact.
 ditto -c -k --keepParent "$stage/Resumap.app" "$zip"
+
+# The disk image: the app beside a link to /Applications, so installing is one
+# drag. hdiutil now and then fails with "Resource busy" on a busy machine (CI
+# runners especially), so it gets three tries.
+dmgsrc="$stage/dmg"
+mkdir "$dmgsrc"
+ditto "$stage/Resumap.app" "$dmgsrc/Resumap.app"
+ln -s /Applications "$dmgsrc/Applications"
+dmg="dist/Resumap-${version}-macos-$(uname -m).dmg"
+rm -f "$dmg"
+for try in 1 2 3; do
+  if hdiutil create -volname "Resumap ${version}" -srcfolder "$dmgsrc" \
+    -fs HFS+ -format UDZO -ov "$dmg" >/dev/null; then
+    break
+  fi
+  [ "$try" = 3 ] && { echo "error: hdiutil could not create $dmg" >&2; exit 1; }
+  sleep 5
+done
 # The signed copy replaces the unsigned one, for running it from here.
 rm -rf "$app"
 ditto "$stage/Resumap.app" "$app"
@@ -40,3 +59,4 @@ ditto "$stage/Resumap.app" "$app"
 echo
 echo "  app: $app ($(du -sh "$app" | cut -f1))"
 echo "  zip: $zip ($(du -sh "$zip" | cut -f1))"
+echo "  dmg: $dmg ($(du -sh "$dmg" | cut -f1))"

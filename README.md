@@ -14,8 +14,11 @@ sent again when you ask for the outreach messages.
 
 No Python and no setup: everything Resumap needs is inside the app.
 
-1. Download `Resumap-<version>-macos-arm64.zip` and double-click it to unzip.
-2. Drag **Resumap** into Applications and open it.
+1. Download the disk image for your Mac from the
+   [latest release](https://github.com/nikhil-kunapareddy/resumap/releases/latest):
+   `Resumap-<version>-macos-arm64.dmg` for Apple Silicon (M1 and later),
+   `Resumap-<version>-macos-x86_64.dmg` for Intel.
+2. Open it, drag **Resumap** onto **Applications**, and open it from there.
 3. The first time, macOS says it cannot check the app, because it is not signed
    with an Apple Developer ID. Open **System Settings > Privacy & Security**,
    scroll down, click **Open Anyway** and confirm. You only do this once.
@@ -28,9 +31,12 @@ it. Resumes, jobs and exports live in `~/Library/Application Support/Resumap`;
 a `.env` placed there works like the one described below.
 
 To build the app yourself, run `./packaging/build_macos.sh` (needs
-[uv](https://docs.astral.sh/uv/)). It writes `dist/Resumap.app` and the zip to
-hand out. PyInstaller builds for the OS and chip it runs on, so a build from an
-Apple Silicon Mac runs on Apple Silicon only.
+[uv](https://docs.astral.sh/uv/)). It writes `dist/Resumap.app`, plus the
+`.dmg` and `.zip` to hand out; `./packaging/smoke_test.sh dist/<name>.dmg`
+then checks the image the way a first launch would. PyInstaller builds for the
+OS and chip it runs on, so a build from an Apple Silicon Mac runs on Apple
+Silicon only. Releases are built by CI for both chips (CONTRIBUTING.md,
+"Releasing").
 
 ## Run from source
 

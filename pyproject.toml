@@ -33,6 +33,11 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/nikhil-kunapareddy/resumap"
+Releases = "https://github.com/nikhil-kunapareddy/resumap/releases"
+Issues = "https://github.com/nikhil-kunapareddy/resumap/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
