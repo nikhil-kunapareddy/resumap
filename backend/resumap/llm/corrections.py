@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .prompts import target_role
+
 # --------------------------------------------------------------------------
 # PDF corrections chat
 #
@@ -90,7 +92,7 @@ def chat_prompt(
     side = f"{round(mx)}pt" if mx else f"as uploaded ({pt('left')}pt)"
     vert = f"{round(my)}pt" if my else f"as uploaded ({pt('top')}pt top, {pt('bottom')}pt bottom)"
     lines = [
-        f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
+        target_role(role, company),
         "<layout>",
         f"font_size {pct(layout['font'])}, line_spacing {pct(layout['leading'])}, "
         f"block_spacing {pct(layout['spacing'])}",

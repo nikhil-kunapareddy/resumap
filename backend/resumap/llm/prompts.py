@@ -7,7 +7,7 @@ replace instructions and the three mode rules. Code reads them through a
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from ..domain import RewriteMode
 
@@ -178,6 +178,22 @@ def with_note(system: str, extra: str) -> str:
             f"\n\nADDITIONAL USER INSTRUCTION (overrides tone preferences above):\n{extra.strip()}"
         )
     return system
+
+
+def target_role(role: str, company: str) -> str:
+    """The <target_role> line every request leads with."""
+    return (
+        f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>"
+    )
+
+
+def jd_point_lines(points: Sequence[dict]) -> list[str]:
+    """One entry per JD point: its text, then the keywords tagged on it."""
+    lines = []
+    for p in points:
+        kw = ", ".join(p.get("keywords") or []) or "none extracted"
+        lines.append(f"- {p['text']}\n  (keywords: {kw})")
+    return lines
 
 
 class PromptStore:

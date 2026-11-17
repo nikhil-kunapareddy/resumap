@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..domain import OutreachKind
+from .prompts import jd_point_lines, target_role
 
 # --------------------------------------------------------------------------
 # Recruiter outreach
@@ -85,14 +86,12 @@ def outreach_prompt(
     lines = [
         f"<candidate_name>{candidate or 'unspecified'}</candidate_name>",
         f"<recruiter_name>{recruiter or 'not known'}</recruiter_name>",
-        f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
+        target_role(role, company),
         "<resume_highlights>",
     ]
     lines += [f"- {h}" for h in highlights] or ["- none available"]
     lines += ["</resume_highlights>", "<job_description_points>"]
-    for p in jd_points:
-        kw = ", ".join(p.get("keywords") or []) or "none extracted"
-        lines.append(f"- {p['text']}\n  (keywords: {kw})")
+    lines += jd_point_lines(jd_points)
     lines.append("</job_description_points>")
     for kind in OUTREACH_EXAMPLE_KINDS:
         lines += _example_lines(list(examples), kind)
