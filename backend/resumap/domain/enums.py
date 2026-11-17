@@ -53,7 +53,7 @@ INCLUDED_STATUSES = frozenset({RewriteStatus.ACCEPTED, RewriteStatus.EDITED})
 
 
 class RewriteMode(StrEnum):
-    """How far a realigned bullet may move from the original (claude.MODE_RULES)."""
+    """How far a realigned bullet may move from the original (llm/prompts.MODE_RULES)."""
 
     AGGRESSIVE = "aggressive"
     BRIDGE = "bridge"

@@ -2,7 +2,7 @@
 
 The app is built with ``create_app(paths, registry)``: its own folder per test,
 and a registry whose every backend name leads to one scripted fake. The
-environment is still set before anything imports ``app.config``, so nothing
+environment is still set before anything imports ``resumap.config``, so nothing
 can fall back to the real ``data/`` directory or a developer's ``.env``.
 """
 

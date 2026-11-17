@@ -10,7 +10,7 @@ Two kinds of model live here:
   an older or newer version still loads, and keys this version does not know
   pass through untouched instead of being dropped on the next save.
 
-The storage layer hands these models out and the routes work with them. The
+The storage layer hands these models out and the services work with them. The
 parser, renderer and prompt builders still take the plain-dict form the
 models serialise to (``ResumeDoc.as_dict()`` for the resume).
 """

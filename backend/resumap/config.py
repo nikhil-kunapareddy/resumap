@@ -62,7 +62,7 @@ MODEL = os.getenv("RESUMAP_MODEL", "claude-opus-5")
 # Who serves the model calls when nothing has been chosen in the settings
 # panel yet: "api" (ANTHROPIC_API_KEY, billed per token), "claude_code",
 # "codex" or "pi" (local CLIs, each on its own sign-in). The panel's choice,
-# once saved, wins over this. See app/backends/ for what each one does.
+# once saved, wins over this. See resumap/llm/backends/ for what each one does.
 BACKEND = os.getenv("RESUMAP_BACKEND", "api").strip().lower() or "api"
 
 # Paths to the CLI backends' binaries, only needed when they are not on the

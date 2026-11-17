@@ -1,6 +1,6 @@
 """A scripted stand-in for a model backend.
 
-It is a ``Backend`` like the real ones in ``app/llm/backends``, so everything
+It is a ``Backend`` like the real ones in ``resumap/llm/backends``, so everything
 above the transport layer runs for real. Each
 response schema has a default answer derived from the prompt it was sent; a
 test swaps one in with ``respond()``. Every call is recorded, so a test can
@@ -20,7 +20,7 @@ from resumap.llm.backends import Backend, Completion, Usage
 Handler = Callable[[str, str], "dict[str, Any] | None"]
 
 # Terms the default JD tagger reports when a point contains them, plus one it
-# always invents so the substring filter in claude._apply_tags has work to do.
+# always invents so the substring filter in tagging.apply_tags has work to do.
 TECH_TERMS = ("Kafka", "Python", "Spark", "PostgreSQL", "Airflow", "React")
 INVENTED_TERM = "Kubernetes"
 
@@ -73,7 +73,7 @@ def _tags(system: str, user: str) -> dict:
 
 def _rewrite(system: str, user: str) -> dict:
     original = between(user, "original_bullet")
-    if "<other_bullets>" in user:  # claude.replace_request
+    if "<other_bullets>" in user:  # bullets.replace_request
         text = REPLACED_TEXT
     else:
         text = tailored(original)
