@@ -43,8 +43,7 @@ async def lifespan(app: FastAPI):
     services: Services = app.state.services
     services.paths.ensure()
     obs.setup(services.paths.logs, LOG_LEVEL)
-    services.store.init()
-    services.settings.apply_saved()
+    services.start()
     registry = services.gateway.registry
     obs.event(
         "app.start",

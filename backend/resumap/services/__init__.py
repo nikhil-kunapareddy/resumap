@@ -38,6 +38,14 @@ class Services:
     corrections: CorrectionService
     outreach: OutreachService
 
+    def start(self) -> None:
+        """Create the folders, bring the database schema up to date and apply the
+        saved settings. Safe to repeat: the launcher runs it before the server
+        starts, to report the backend, and the app's lifespan runs it again."""
+        self.paths.ensure()
+        self.store.init()
+        self.settings.apply_saved()
+
     @classmethod
     def build(
         cls,

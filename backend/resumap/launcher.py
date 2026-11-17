@@ -21,6 +21,7 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from pathlib import Path
 from typing import Literal
 
 from . import config
@@ -60,9 +61,7 @@ def serve(*, port: int | None = None, open_browser: bool = False) -> None:
     from .main import app
 
     services = app.state.services
-    services.paths.ensure()
-    services.store.init()
-    services.settings.apply_saved()
+    services.start()
 
     port = port or config.PORT
     url = f"http://{config.HOST}:{port}"
@@ -172,6 +171,20 @@ def alert(message: str) -> None:
         )
 
 
+# server.log takes the detached server's console, a line for every request,
+# so it is started afresh past this size instead of growing for good.
+SERVER_LOG_MAX = 1_000_000
+
+
+def rotate_log(path: Path, limit: int = SERVER_LOG_MAX) -> None:
+    """Move `path` aside to `<name>.1` (replacing the last one) once it outgrows `limit`."""
+    try:
+        if path.stat().st_size > limit:
+            path.replace(path.with_name(path.name + ".1"))
+    except FileNotFoundError:
+        pass
+
+
 def open_app() -> None:
     """Open the running Resumap in the browser, starting it first if needed."""
     host = config.HOST
@@ -189,6 +202,7 @@ def open_app() -> None:
 
     config.LOG_DIR.mkdir(parents=True, exist_ok=True)
     log = config.LOG_DIR / "server.log"
+    rotate_log(log)
     # The app binary re-runs itself as the server; from a checkout, the entry
     # script that called us does.
     cmd = [sys.executable] if config.FROZEN else [sys.executable, os.path.abspath(sys.argv[0])]

@@ -181,3 +181,16 @@ def test_the_app_keeps_its_data_in_the_platforms_user_folder(monkeypatch):
     assert user_data_dir("darwin", home) == home / "Library/Application Support/Resumap"
     assert user_data_dir("linux", home) == home / ".local/share/resumap"
     assert user_data_dir("win32", home) == home / "AppData/Roaming/Resumap"
+
+
+def test_the_server_log_starts_afresh_once_it_outgrows_its_limit(tmp_path):
+    log = tmp_path / "server.log"
+    launcher.rotate_log(log, limit=10)  # nothing there yet: nothing to do
+    log.write_text("short")
+    launcher.rotate_log(log, limit=10)
+    assert log.read_text() == "short"
+
+    log.write_text("x" * 11)
+    launcher.rotate_log(log, limit=10)
+    assert not log.exists()
+    assert (tmp_path / "server.log.1").read_text() == "x" * 11
