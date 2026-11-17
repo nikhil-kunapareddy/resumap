@@ -62,16 +62,12 @@ class Line:
     # us re-render that alignment instead of collapsing it to one long string.
     left: str = ""
     right: str = ""
-    gap: float = 0.0
     text_x0: float = 0.0
     runs: list[Run] = field(default_factory=list)
     right_runs: list[Run] = field(default_factory=list)
     # The source line had its inter-word spaces stretched, i.e. it was
     # justified to both margins.
     stretched: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 @dataclass
@@ -371,7 +367,6 @@ def _group_chars_to_lines(
                 page=page_no,
                 left=left_txt if right_txt else "",
                 right=right_txt,
-                gap=tab_w,
                 text_x0=text_x0,
                 runs=_runs_from_chunks(left_chunks),
                 right_runs=_runs_from_chunks(right_chunks),
@@ -411,28 +406,21 @@ def extract_pdf(path: str) -> ExtractedDoc:
                 for h in (page.hyperlinks or [])
                 if h.get("uri")
             ]
-            # Underlines: strokes too short to be a section rule.
-            strokes = [
-                {"x0": float(r["x0"]), "x1": float(r["x1"]), "top": float(r["top"])}
-                for r in list(page.lines) + list(page.rects)
-                if abs(r["bottom"] - r["top"]) <= 1.5
-                and 2.0 < abs(r["x1"] - r["x0"]) <= page.width * 0.30
-            ]
-            all_lines.extend(_group_chars_to_lines(page.chars, i, links, strokes))
-
-            # Horizontal rules show up either as thin rects or as lines.
-            for r in page.rects:
-                h = abs(r["y1"] - r["y0"])
+            # Thin horizontal shapes, drawn either as rects or as lines: a short
+            # one is an underline stroke, one wider than 30% of the page a
+            # section rule.
+            strokes = []
+            for r in list(page.rects) + list(page.lines):
                 w = abs(r["x1"] - r["x0"])
-                if h <= 2.5 and w > page.width * 0.30:
+                if abs(r["bottom"] - r["top"]) <= 1.5 and 2.0 < w <= page.width * 0.30:
+                    strokes.append(
+                        {"x0": float(r["x0"]), "x1": float(r["x1"]), "top": float(r["top"])}
+                    )
+                elif abs(r["y1"] - r["y0"]) <= 2.5 and w > page.width * 0.30:
                     doc.rules.append(
                         Rule(top=float(r["top"]), x0=float(r["x0"]), x1=float(r["x1"]), page=i)
                     )
-            for ln in page.lines:
-                if abs(ln["y1"] - ln["y0"]) <= 2.5 and abs(ln["x1"] - ln["x0"]) > page.width * 0.30:
-                    doc.rules.append(
-                        Rule(top=float(ln["top"]), x0=float(ln["x0"]), x1=float(ln["x1"]), page=i)
-                    )
+            all_lines.extend(_group_chars_to_lines(page.chars, i, links, strokes))
 
     doc.lines = all_lines
 
@@ -479,17 +467,52 @@ def _docx_runs(para: Any) -> list[Run]:
     return runs
 
 
+# DOCX and TXT carry no geometry, so their lines are laid out on a nominal
+# Letter page: 54pt margins, one line per paragraph, a little extra room for a
+# blank line.
+_SYNTH_LEFT = _SYNTH_TOP = 54.0
+_SYNTH_RIGHT = 612.0 - 54.0
+_SYNTH_STEP = 1.7  # line pitch, as a multiple of the text size
+_SYNTH_BLANK = 6.0
+
+
+def _synthetic_line(
+    text: str,
+    x0: float,
+    y: float,
+    size: float,
+    font: str,
+    bold: bool,
+    italic: bool,
+    runs: list[Run] | None = None,
+) -> Line:
+    return Line(
+        text=text,
+        x0=x0,
+        x1=_SYNTH_RIGHT,
+        top=y,
+        bottom=y + size * 1.35,
+        size=size,
+        font=font,
+        bold=bold,
+        italic=italic,
+        page=0,
+        text_x0=x0,
+        runs=runs or [],
+    )
+
+
 def extract_docx(path: str) -> ExtractedDoc:
     """DOCX carries far less geometry, so we synthesize sane defaults."""
     import docx
 
     d = docx.Document(path)
     doc = ExtractedDoc()
-    y = 54.0
+    y = _SYNTH_TOP
     for para in d.paragraphs:
         text = para.text.strip()
         if not text:
-            y += 6
+            y += _SYNTH_BLANK
             continue
         runs = [r for r in para.runs if r.text.strip()]
         bold = bool(runs) and sum(bool(r.bold) for r in runs) > len(runs) / 2
@@ -504,7 +527,7 @@ def extract_docx(path: str) -> ExtractedDoc:
             size, bold = 16.0, True
         elif "heading" in style:
             size, bold = 11.5, True
-        indent = 54.0
+        indent = _SYNTH_LEFT
         if para.paragraph_format.left_indent is not None:
             indent += para.paragraph_format.left_indent.pt
         styled = _docx_runs(para)
@@ -512,56 +535,30 @@ def extract_docx(path: str) -> ExtractedDoc:
             text = "• " + text
             if styled:
                 styled.insert(0, Run(text="• ", bold=False, italic=False))
-        doc.lines.append(
-            Line(
-                text=text,
-                x0=indent,
-                x1=558.0,
-                top=y,
-                bottom=y + size * 1.35,
-                size=size,
-                font="Helvetica-Bold" if bold else "Helvetica",
-                bold=bold,
-                italic=italic,
-                page=0,
-                text_x0=indent,
-                runs=styled,
-            )
-        )
-        y += size * 1.7
+        font = "Helvetica-Bold" if bold else "Helvetica"
+        doc.lines.append(_synthetic_line(text, indent, y, size, font, bold, italic, styled))
+        y += size * _SYNTH_STEP
     return doc
 
 
 def extract_txt(path: str) -> ExtractedDoc:
     doc = ExtractedDoc()
-    y = 54.0
+    y = _SYNTH_TOP
     with open(path, encoding="utf-8", errors="replace") as fh:
         for raw in fh:
             text = raw.rstrip()
             if not text.strip():
-                y += 6
+                y += _SYNTH_BLANK
                 continue
             stripped = text.lstrip()
-            indent = 54.0 + (len(text) - len(stripped)) * 3.0
+            indent = _SYNTH_LEFT + (len(text) - len(stripped)) * 3.0
             # ALL-CAPS short lines are almost always section headings.
             is_head = stripped.isupper() and len(stripped) < 40
             size = 11.5 if is_head else 10.5
             doc.lines.append(
-                Line(
-                    text=stripped,
-                    x0=indent,
-                    x1=558.0,
-                    top=y,
-                    bottom=y + size * 1.35,
-                    size=size,
-                    font="Helvetica",
-                    bold=is_head,
-                    italic=False,
-                    page=0,
-                    text_x0=indent,
-                )
+                _synthetic_line(stripped, indent, y, size, "Helvetica", is_head, False)
             )
-            y += size * 1.7
+            y += size * _SYNTH_STEP
     return doc
 
 

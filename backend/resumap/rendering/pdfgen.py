@@ -24,7 +24,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
 from .. import obs
-from ..parsing.resume import HARD_EXCLUDE_HINTS
+from ..parsing.resume import HARD_EXCLUDE_HINTS, section_has
 
 SERIF_HINTS = (
     "times",
@@ -92,10 +92,15 @@ def _rgb(color: str) -> tuple[float, float, float] | None:
 # bullet -- exactly what an ATS reads. Vera ships with ReportLab, so it is
 # always available, and it carries a real U+2022 that extracts as itself.
 # (The source resumes do the same thing: Times body text, Arial bullet.)
-_BULLET_FONT = None
+_BULLET_FONT: str | None = None
 
 
 def _bullet_font() -> str:
+    """The registered Vera, or Times-Roman if it cannot be loaded.
+
+    Resolved once either way: a missing font stays missing, and retrying it
+    cost a failed font search for every bullet of every fit probe.
+    """
     global _BULLET_FONT
     if _BULLET_FONT is None:
         try:
@@ -103,9 +108,10 @@ def _bullet_font() -> str:
 
             pdfmetrics.registerFont(TTFont("ResumapBullet", "Vera.ttf"))
             _BULLET_FONT = "ResumapBullet"
-        except Exception:  # noqa: BLE001 - fall back to a WinAnsi glyph
-            _BULLET_FONT = None
-    return _BULLET_FONT or "Times-Roman"
+        except Exception as exc:  # noqa: BLE001 - fall back to a WinAnsi glyph
+            _BULLET_FONT = "Times-Roman"
+            obs.warn("render.bullet_font_missing", error=type(exc).__name__, using=_BULLET_FONT)
+    return _BULLET_FONT
 
 
 # Vera has no U+25CF, so a source drawn with a heavy "●" (Word's default
@@ -178,21 +184,21 @@ def _font(fontname: str, bold: bool, italic: bool) -> str:
     return reg
 
 
-def slugify(value: str) -> str:
-    s = re.sub(r"[^a-z0-9]+", "", (value or "").lower())
-    return s or "company"
+def slugify(value: str, fallback: str = "company") -> str:
+    """Lower-case letters and digits only, or `fallback` if nothing is left."""
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower()) or fallback
 
 
 def export_filename(first_name: str, company: str, when: date | None = None) -> str:
     when = when or date.today()
-    first = re.sub(r"[^a-z0-9]+", "", (first_name or "resume").lower()) or "resume"
-    return f"{first}_{slugify(company)}_{when.strftime('%m%d')}.pdf"
+    return f"{slugify(first_name, 'resume')}_{slugify(company)}_{when.strftime('%m%d')}.pdf"
 
 
 # The adjustments a user can ask for on top of the mirrored layout (see
-# claude.revise_pdf). Font, leading and spacing multiply the source's own
-# values; margins replace them, in points; justify overrides the alignment
-# read from the source. The fit ladder still applies on top of all of it.
+# llm/gateway.ModelGateway.revise_pdf). Font, leading and spacing multiply the
+# source's own values; margins replace them, in points; justify overrides the
+# alignment read from the source. The fit ladder still applies on top of all
+# of it.
 LAYOUT_DEFAULTS = {
     "font": 1.0,
     "leading": 1.0,
@@ -355,11 +361,17 @@ class ResumeRenderer:
 
     # -- styled text --------------------------------------------------------
 
-    def _styled_words(self, blk: dict, size: float, which: str = "runs") -> list[Word]:
+    @staticmethod
+    def _block_font(blk: dict) -> str:
+        """The base-14 face of the block's dominant style."""
+        ln = blk.get("_line") or {}
+        return _font(ln.get("font", ""), bool(ln.get("bold")), bool(ln.get("italic")))
+
+    def _styled_words(self, blk: dict, which: str = "runs") -> list[Word]:
         """Flatten a block's runs into drawable words.
 
-        Merged multi-line blocks carry no runs -- their styling is uniform, so
-        the block's dominant style stands in.
+        A block with no runs (plain-text uploads, inserted bullets, a repaired
+        block with a right column) takes the block's dominant style instead.
 
         A run's link is inherited by every word in it; a word the source left as
         bare URL text gets one synthesized, so a link is restored whether the
@@ -386,7 +398,7 @@ class ResumeRenderer:
                 out.append(Word(w, f, uri or _autolink(w), color, under))
         return out
 
-    def _columns(self, blk: dict, size: float) -> tuple[list[Word], list[Word]]:
+    def _columns(self, blk: dict) -> tuple[list[Word], list[Word]]:
         """The block's left-hand words and its right-aligned column.
 
         A date recovered from the text rather than from a tab stop has no
@@ -394,18 +406,17 @@ class ResumeRenderer:
         back off, or it is drawn inline and loses its alignment ("...
         Example University July 2021 - May 2023").
         """
-        left = self._styled_words(blk, size)
+        left = self._styled_words(blk)
         if not blk.get("right"):
             return left, []
-        right = self._styled_words(blk, size, "right_runs")
+        right = self._styled_words(blk, "right_runs")
         if right:
             return left, right
         tail = str(blk["right"]).split()
         n = len(tail)
         if n and len(left) > n and [w.text for w in left[-n:]] == tail:
             return left[:-n], left[-n:]
-        ln = blk.get("_line") or {}
-        f = _font(ln.get("font", ""), bool(ln.get("bold")), bool(ln.get("italic")))
+        f = self._block_font(blk)
         return left, [Word(w, f) for w in tail]
 
     @staticmethod
@@ -512,10 +523,9 @@ class ResumeRenderer:
         """
         if not words:
             return
-        natural = sum(pdfmetrics.stringWidth(w.text, w.font, size) for w in words)
+        natural = self._words_width(words, size)
         gaps = len(words) - 1
         space_w = pdfmetrics.stringWidth(" ", words[0].font, size)
-        natural += space_w * gaps
 
         extra = 0.0
         if gaps > 0:
@@ -556,10 +566,15 @@ class ResumeRenderer:
 
     # -- rendering ----------------------------------------------------------
 
-    def render(self, out, overrides: dict[str, str] | None = None) -> int:
-        """Draw the resume. Returns the number of pages used."""
+    def render(self, out=None, overrides: dict[str, str] | None = None) -> int:
+        """Draw the resume. Returns the number of pages used.
+
+        With no `out` this is a measuring pass: the layout runs exactly as it
+        would and `pages`, `content_height` and `stats` come out the same, but
+        the PDF is never serialised. The fit ladder probes this way.
+        """
         overrides = overrides or {}
-        c = canvas.Canvas(out, pagesize=(self.width, self.height))
+        c = canvas.Canvas(io.BytesIO() if out is None else out, pagesize=(self.width, self.height))
         if isinstance(out, (str, Path)):
             c.setTitle(Path(str(out)).stem)
         y = self.height - self.mt
@@ -583,15 +598,14 @@ class ResumeRenderer:
             y -= space
             self.content_height += space
 
-            words, right_words = self._columns(blk, size)
+            words, right_words = self._columns(blk)
             # Rewritten text replaces the block's own words. It is plain text,
             # so a word it kept verbatim takes its original style and anything
             # new takes the block's dominant one; a link is otherwise only
             # recognised from the words themselves.
             override = overrides.get(blk["id"])
             if override is not None:
-                ofont = _font(ln.get("font", ""), bool(ln.get("bold")), bool(ln.get("italic")))
-                words = self._restyle(override, words, ofont)
+                words = self._restyle(override, words, self._block_font(blk))
 
             if right_words:
                 avail -= self._words_width(right_words, size) + size * 0.8
@@ -662,35 +676,40 @@ class ResumeRenderer:
             if not blk.get("inserted"):
                 prev = blk
 
-        c.save()
+        if out is not None:
+            c.save()
         return self.pages
 
 
 def render_resume(
     doc: dict,
-    out_path: str,
+    out_path: str | None = None,
     overrides: dict[str, str] | None = None,
-    single_page: bool = True,
     layout: dict | None = None,
 ) -> dict:
     """Render to `out_path`, compressing as needed to land on one page.
 
     Returns the chosen scales so callers can tell the user when a resume had to
-    be squeezed, and how hard, plus per-block line counts under `blocks`.
+    be squeezed, and how hard, plus per-block line counts under `blocks`. With
+    no `out_path` nothing is written: the same fit, for callers that only need
+    to know how the page lays out.
     """
     layout = clean_layout(layout)
+    probe: ResumeRenderer | None = None
 
     def pages_at(step: tuple[float, float, float]) -> int:
-        return ResumeRenderer(doc, *step, layout=layout).render(io.BytesIO(), overrides)
+        nonlocal probe
+        probe = ResumeRenderer(doc, *step, layout=layout)
+        return probe.render(None, overrides)
 
     chosen = None
     probes: list[dict] = []
     for i, step in enumerate(FIT_LADDER):
         pages = pages_at(step)
         probes.append({"lead": step[0], "space": step[1], "font": step[2], "pages": pages})
-        if pages == 1 or not single_page:
+        if pages == 1:
             chosen = step
-            if i and single_page:
+            if i:
                 chosen = _refine(FIT_LADDER[i - 1], step, pages_at)
             break
 
@@ -699,9 +718,10 @@ def render_resume(
         # room the content wants and solve for the type size that fits, then
         # step down a little at a time to absorb re-wrapping (a smaller font
         # re-flows lines, which does not shrink height perfectly linearly).
+        # The loop's last probe was the tightest rung, so its measurements are
+        # already in hand.
         tight = FIT_LADDER[-1]
-        probe = ResumeRenderer(doc, *tight, layout=layout)
-        probe.render(io.BytesIO(), overrides)
+        assert probe is not None
         usable = probe.height - probe.mt - probe.mb
         needed = max(probe.content_height, 1.0)
         scale = min(1.0, usable / needed)
@@ -791,8 +811,21 @@ WRAP_WASTE = 4
 
 def _line_stats(doc: dict, layout: dict | None) -> dict[str, dict]:
     r = ResumeRenderer(doc, layout=layout)
-    r.render(io.BytesIO(), {})
+    r.render(None, {})
     return r.stats
+
+
+def _block_budgets(stats: dict[str, dict]) -> dict[str, int]:
+    return {
+        bid: max(0, st["source_lines"] * (st["chars_per_line"] - WRAP_WASTE))
+        for bid, st in stats.items()
+    }
+
+
+def _bullet_budget(doc: dict, stats: dict[str, dict], lines: int) -> int:
+    bullets = {b["id"] for b in doc.get("blocks") or [] if b["kind"] == "bullet"}
+    cpl = sorted(st["chars_per_line"] for bid, st in stats.items() if bid in bullets)
+    return lines * (cpl[len(cpl) // 2] - WRAP_WASTE) if cpl else 0
 
 
 def line_budget(doc: dict, layout: dict | None = None) -> dict[str, int]:
@@ -801,19 +834,25 @@ def line_budget(doc: dict, layout: dict | None = None) -> dict[str, int]:
     Measured with the renderer's own metrics at full size, so a rewrite held to
     this lands on the same number of lines the original occupied.
     """
-    return {
-        bid: max(0, st["source_lines"] * (st["chars_per_line"] - WRAP_WASTE))
-        for bid, st in _line_stats(doc, layout).items()
-    }
+    return _block_budgets(_line_stats(doc, layout))
 
 
 def new_bullet_budget(doc: dict, layout: dict | None = None, lines: int = 2) -> int:
     """Characters a brand-new bullet may use to stay within `lines` lines."""
-    bullets = {b["id"] for b in doc.get("blocks") or [] if b["kind"] == "bullet"}
-    cpl = sorted(
-        st["chars_per_line"] for bid, st in _line_stats(doc, layout).items() if bid in bullets
-    )
-    return lines * (cpl[len(cpl) // 2] - WRAP_WASTE) if cpl else 0
+    return _bullet_budget(doc, _line_stats(doc, layout), lines)
+
+
+class Budgets(NamedTuple):
+    """Both length budgets, from one measuring pass."""
+
+    lines: dict[str, int]  # per block, as line_budget
+    new_bullet: int  # as new_bullet_budget with its default two lines
+
+
+def budgets(doc: dict, layout: dict | None = None) -> Budgets:
+    """line_budget and new_bullet_budget together, for the price of one render."""
+    stats = _line_stats(doc, layout)
+    return Budgets(_block_budgets(stats), _bullet_budget(doc, stats, 2))
 
 
 # ---------------------------------------------------------------------------
@@ -823,8 +862,7 @@ def new_bullet_budget(doc: dict, layout: dict | None = None, lines: int = 2) -> 
 
 def _attribute_section(name: str) -> bool:
     """Skills, tools, certifications: a list of attributes, conventionally last."""
-    n = (name or "").lower()
-    return any(h in n for h in HARD_EXCLUDE_HINTS)
+    return section_has(name, HARD_EXCLUDE_HINTS)
 
 
 def insert_blocks(doc: dict, inserts: list[dict]) -> dict:

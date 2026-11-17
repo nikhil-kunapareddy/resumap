@@ -8,25 +8,32 @@ from pathlib import Path
 from typing import Any
 
 from .. import obs
+from .pdfgen import ResumeRenderer
 
 
 def verify_pdf(
-    pdf_path: str | Path, doc: dict[str, Any], source_path: str | None = None
+    pdf_path: str | Path,
+    doc: dict[str, Any],
+    source_path: str | None = None,
+    layout: dict | None = None,
 ) -> dict[str, Any]:
     """Check the rendered PDF for the defects that actually shipped before.
 
     Each check corresponds to a bug that reached a real export: text running
     past the right margin, a text layer with no spaces in it (which is what an
     ATS reads), a substituted dingbat font leaving a stray letter at the head of
-    every bullet, page count, and hyperlinks silently dropped -- a resume whose
-    LinkedIn and GitHub links are dead text has lost something a reader uses.
+    every bullet, glyphs whose text extracts as "(cid:N)", page count, and
+    hyperlinks silently dropped -- a resume whose LinkedIn and GitHub links are
+    dead text has lost something a reader uses.
+
+    `layout` is the one the PDF was rendered with, so the margin is measured
+    where the renderer actually put it rather than where the source had it.
     """
     result: dict[str, Any] = {"ok": True}
     try:
         import pdfplumber
 
-        g = doc.get("geometry") or {}
-        right = float(g.get("width") or 612.0) - float(g.get("right") or 36.0)
+        right = ResumeRenderer(doc, layout=layout).right_edge
 
         with pdfplumber.open(str(pdf_path)) as pdf:
             result["pages"] = len(pdf.pages)
@@ -46,6 +53,10 @@ def verify_pdf(
         # A spaceless text layer is the signature of per-word placement.
         result["has_spaces"] = text.count(" ") > words * 0.5
         result["dingbat_font"] = any("Dingbat" in f for f in result["fonts"])
+        # A glyph with no Unicode mapping, as Times' bullet is when Vera is
+        # missing. Reported among the problems only: the API's SelfCheck has
+        # no field for the count.
+        unmapped = text.count("(cid:")
 
         if source_path and str(source_path).lower().endswith(".pdf"):
 
@@ -70,6 +81,8 @@ def verify_pdf(
             problems.append("text layer has no spaces (ATS would read one long word)")
         if result["dingbat_font"]:
             problems.append("dingbat substitution leaves a stray glyph per bullet")
+        if unmapped:
+            problems.append(f"{unmapped} glyphs extract as (cid:N), unreadable to an ATS")
         lost = result.get("source_links", 0) - result["links"]
         if lost > 0:
             problems.append(f"{lost} of {result['source_links']} source hyperlinks dropped")

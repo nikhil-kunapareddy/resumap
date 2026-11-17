@@ -27,6 +27,7 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
         return sum(1 for r in (b.get("runs") or []) + (b.get("right_runs") or []) if r.get("uri"))
 
     blocks = doc.get("blocks") or []
+    with_text = _text_allowed()
     out: list[str] = [
         f"PARSE REPORT  resume={resume_id}  label={label}",
         "=" * 78,
@@ -60,7 +61,7 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
             f"{(b.get('section') or '-')[:23]:<24}"
             f"{len(b.get('text') or ''):>5}  {flags}   {reason}"
         )
-        if _text_allowed():
+        if with_text:
             out.append(f"       {obs.scrub(b.get('text') or '')[:70]}")
 
     out += ["", "counts by reason:"]
@@ -78,5 +79,6 @@ def write_parse_report(
         path = directory / f"{resume_id}.txt"
         path.write_text(parse_report(resume_id, label, doc), encoding="utf-8")
         return path
-    except Exception:  # noqa: BLE001 - reporting must not break an upload
+    except Exception as exc:  # noqa: BLE001 - reporting must not break an upload
+        obs.warn("parse.report_failed", resume_id=resume_id, error=type(exc).__name__)
         return None

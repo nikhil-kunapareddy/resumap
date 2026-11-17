@@ -5,7 +5,7 @@
 from importlib.metadata import version
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).parent
 VERSION = version("resumap")
@@ -13,7 +13,13 @@ VERSION = version("resumap")
 a = Analysis(
     [str(ROOT / "packaging" / "resumap_app.py")],
     pathex=[str(ROOT / "backend")],
-    datas=[(str(ROOT / "frontend"), "frontend")],
+    # Vera is the font every exported bullet is drawn in (rendering/pdfgen.py).
+    # PyInstaller takes reportlab's code but not its data files, and without it
+    # each bullet falls back to a glyph that extracts as "(cid:127)".
+    datas=[
+        (str(ROOT / "frontend"), "frontend"),
+        *collect_data_files("reportlab", includes=["fonts/Vera.ttf"]),
+    ],
     # uvicorn picks its loop and protocol modules by name at runtime, and the
     # routers are found through resumap.api.routers.ALL.
     hiddenimports=collect_submodules("uvicorn") + collect_submodules("resumap"),

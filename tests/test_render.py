@@ -13,6 +13,7 @@ from resumap.parsing.resume import parse_resume
 from resumap.rendering.pdfgen import (
     FIT_LADDER,
     LAYOUT_DEFAULTS,
+    budgets,
     clean_layout,
     export_filename,
     insert_blocks,
@@ -62,6 +63,34 @@ def test_untouched_export_passes_the_self_check(doc, resume_files, tmp_path):
     assert check["overflow_rows"] == 0
     assert check["has_spaces"] and not check["dingbat_font"]
     assert check["similarity_pct"] >= 95
+
+
+def test_the_self_check_measures_the_margin_the_page_was_rendered_with(doc, tmp_path):
+    out = tmp_path / "out.pdf"
+    layout = {"margin_x": 20}
+    render_resume(doc, str(out), layout=layout)
+    check = verify_pdf(out, doc, layout=layout)
+    assert check["overflow_rows"] == 0, check["problems"]
+
+
+def test_without_vera_bullets_fall_back_once_and_the_self_check_says_so(doc, tmp_path, monkeypatch):
+    import reportlab.pdfbase.ttfonts as ttfonts
+
+    from resumap import obs
+    from resumap.rendering import pdfgen
+
+    def missing(*_a, **_k):
+        raise OSError("Can't open file Vera.ttf")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(pdfgen, "_BULLET_FONT", None)
+    monkeypatch.setattr(ttfonts, "TTFont", missing)
+    monkeypatch.setattr(obs, "warn", lambda ev, **_f: warnings.append(ev))
+    out = tmp_path / "out.pdf"
+    render_resume(doc, str(out))
+    assert warnings.count("render.bullet_font_missing") == 1
+    check = verify_pdf(out, doc)
+    assert any("(cid:N)" in p for p in check["problems"]), check
 
 
 def test_every_source_bullet_survives_into_the_text_layer(doc, tmp_path):
@@ -137,6 +166,18 @@ def test_a_layout_change_moves_the_page(doc, tmp_path):
     assert base["blocks"] != bigger["blocks"]
 
 
+def test_without_a_path_the_fit_is_the_same_and_nothing_is_written(doc, tmp_path, monkeypatch):
+    overrides = {_ids(doc, "bullet")[0]: "Led a small rewrite of the ingest path."}
+    written = render_resume(doc, str(tmp_path / "out.pdf"), overrides, layout={"font": 1.2})
+    monkeypatch.chdir(tmp_path)
+    measured = render_resume(doc, None, overrides, layout={"font": 1.2})
+    assert [p.name for p in tmp_path.iterdir()] == ["out.pdf"]
+    assert {k: v for k, v in measured.items() if k != "path"} == {
+        k: v for k, v in written.items() if k != "path"
+    }
+    assert measured["path"] is None
+
+
 # -- budgets ----------------------------------------------------------------
 
 
@@ -162,6 +203,13 @@ def test_a_new_bullet_gets_about_two_lines(doc):
     budget = new_bullet_budget(doc)
     one_line = min(line_budget(doc)[bid] for bid in _ids(doc, "bullet"))
     assert one_line < budget < 3 * one_line
+
+
+@pytest.mark.parametrize("layout", [None, {"font": 0.9}])
+def test_budgets_gives_both_budgets_from_one_pass(doc, layout):
+    both = budgets(doc, layout)
+    assert both.lines == line_budget(doc, layout)
+    assert both.new_bullet == new_bullet_budget(doc, layout)
 
 
 # -- inserted bullets -------------------------------------------------------

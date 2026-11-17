@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from typing import Any
 
 from .. import obs
@@ -102,8 +103,9 @@ DOING_SECTION_HINTS = (
     "mentorship",
 )
 
-# Tier 3 -- credentials and affiliations. Excluded unless a tier-2 word is
-# also present.
+# Tier 3 -- credentials and affiliations. Like any heading without a tier-2
+# word they hold no points; naming them keeps them out of the shape-only
+# fallback net too, which otherwise trusts any long bullet.
 SOFT_EXCLUDE_HINTS = (
     "education",
     "academic",
@@ -218,16 +220,19 @@ NON_ACTION_ED = {
 }
 
 
+def section_has(section: str, hints: tuple[str, ...]) -> bool:
+    """Whether a section heading contains any of `hints`, ignoring case,
+    digits and punctuation."""
+    norm = re.sub(r"[^a-z ]", " ", (section or "").lower())
+    return any(h in norm for h in hints)
+
+
 def _section_allows_points(section: str) -> bool:
     """True when a section holds work you did, rather than attributes you have."""
-    norm = re.sub(r"[^a-z ]", " ", (section or "").lower())
-    if any(h in norm for h in HARD_EXCLUDE_HINTS):
+    if section_has(section, HARD_EXCLUDE_HINTS):
         return False
-    if any(h in norm for h in DOING_SECTION_HINTS):
-        return True
-    if any(h in norm for h in SOFT_EXCLUDE_HINTS):
-        return False
-    return False
+    # Tier-3 headings and unrecognised ones alike hold no points.
+    return section_has(section, DOING_SECTION_HINTS)
 
 
 def _starts_with_action(text: str) -> bool:
@@ -403,7 +408,7 @@ def _looks_like_section(line: Line, body: float) -> bool:
     return (all_caps or line.bold) and len(t.split()) <= 5 and line.size >= body - 0.6
 
 
-def _looks_like_entry(line: Line, body: float) -> bool:
+def _looks_like_entry(line: Line) -> bool:
     """A role/company/date header, not a bullet."""
     if BULLET_RE.match(line.text):
         return False
@@ -548,7 +553,7 @@ def parse_resume(path: str) -> dict[str, Any]:
                 and aligned
                 and abs(line.size - pl["size"]) < 1.2
                 and not _looks_like_section(line, body)
-                and not _looks_like_entry(line, body)
+                and not _looks_like_entry(line)
             )
             if merge:
                 merges.append(
@@ -592,7 +597,7 @@ def parse_resume(path: str) -> dict[str, Any]:
             and (EMAIL_RE.search(text) or PHONE_RE.search(text) or URL_RE.search(text))
         ):
             kind = "contact"
-        elif _looks_like_entry(line, body):
+        elif _looks_like_entry(line):
             kind = "entry"
         elif _looks_like_section(line, body):
             kind = "section"
@@ -649,10 +654,7 @@ def parse_resume(path: str) -> dict[str, Any]:
                 b["kind"] == "bullet"
                 and len(t) >= 30
                 and not _looks_like_list(t)
-                and not any(
-                    h in re.sub(r"[^a-z ]", " ", b.get("section", "").lower())
-                    for h in HARD_EXCLUDE_HINTS + SOFT_EXCLUDE_HINTS
-                )
+                and not section_has(b.get("section", ""), HARD_EXCLUDE_HINTS + SOFT_EXCLUDE_HINTS)
             )
             if b["mappable"]:
                 b["reason"] = "fallback-shape-only"
@@ -669,8 +671,6 @@ def parse_resume(path: str) -> dict[str, Any]:
         name = blocks[0]["text"]
 
     g = doc.geometry
-    from collections import Counter
-
     reasons = Counter(b.get("reason") or "point" for b in blocks)
     kinds = Counter(b["kind"] for b in blocks)
     diagnostics: dict[str, Any] = {
