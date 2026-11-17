@@ -26,7 +26,7 @@ class RewriteService(Service):
         """
         job = self._job(job_id)
         resume = self._resume(job.resume_id)
-        why = self.gateway.status()
+        why = await self.gateway.astatus()
         if why:
             raise Unavailable(why)
 

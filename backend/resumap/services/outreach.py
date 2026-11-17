@@ -54,7 +54,7 @@ class OutreachService(Service):
     async def draft(self, job_id: int, recruiter: str, extra: str) -> OutreachOut:
         job = self._job(job_id)
         resume = self._resume(job.resume_id)
-        why = self.gateway.status()
+        why = await self.gateway.astatus()
         if why:
             raise Unavailable(why)
 
@@ -81,7 +81,6 @@ class OutreachService(Service):
         except BackendUnavailable as exc:
             raise Unavailable(str(exc)) from exc
         except Exception as exc:  # noqa: BLE001 - the draft is optional, say why it failed
-            obs.record_failure("outreach", exc, 0.0, job_id=job_id)
             raise UpstreamFailed(
                 f"Could not draft the outreach: {type(exc).__name__}: {exc}"
             ) from exc

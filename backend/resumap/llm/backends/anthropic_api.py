@@ -1,4 +1,10 @@
-"""The Anthropic API backend: one ``messages.parse`` call per request."""
+"""The Anthropic API backend: one structured ``messages.create`` call per request.
+
+The reply is validated here rather than by the SDK's ``messages.parse``, which
+raises on a reply that does not fit the schema (cut off at max_tokens, say).
+That exception would lose the call's usage and prompt archive, and its message
+echoes the reply, so resume text would reach the metadata-only log.
+"""
 
 from __future__ import annotations
 
@@ -6,9 +12,9 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 import anthropic
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Effort, Usage
+from .base import CALL_TIMEOUT_S, Backend, Completion, Effort, Usage
 
 
 class AnthropicApiBackend(Backend):
@@ -27,6 +33,8 @@ class AnthropicApiBackend(Backend):
         super().__init__(default_model)
         self._api_key = api_key
         self._saved_key: str | None = None
+        # One client, and so one connection pool, per key in use.
+        self._client: tuple[str | None, anthropic.AsyncAnthropic] | None = None
 
     def set_key(self, key: str | None) -> None:
         # Held here only, never put in os.environ, so no CLI backend's
@@ -40,6 +48,14 @@ class AnthropicApiBackend(Backend):
 
     def _key(self) -> str | None:
         return self._saved_key or self._api_key()
+
+    def _client_for(self, key: str | None) -> anthropic.AsyncAnthropic:
+        if self._client is None or self._client[0] != key:
+            self._client = (
+                key,
+                anthropic.AsyncAnthropic(api_key=key, max_retries=3, timeout=CALL_TIMEOUT_S),
+            )
+        return self._client[1]
 
     def unavailable(self) -> str | None:
         if self._key() is None:
@@ -68,19 +84,28 @@ class AnthropicApiBackend(Backend):
         max_tokens: int,
         effort: Effort,
     ) -> Completion:
-        client = anthropic.AsyncAnthropic(api_key=self._key(), max_retries=3)
-        resp = await client.messages.parse(
+        resp = await self._client_for(self._key()).messages.create(
             model=model,
             max_tokens=max_tokens,
             system=system,
-            output_config={"effort": effort},
+            output_config={
+                "effort": effort,
+                "format": {
+                    "type": "json_schema",
+                    "schema": anthropic.transform_schema(schema.model_json_schema()),
+                },
+            },
             messages=[{"role": "user", "content": user}],
-            output_format=schema,
         )
+        text = self._response_text(resp)
+        try:
+            parsed: BaseModel | None = schema.model_validate_json(text)
+        except ValidationError:
+            parsed = None
         u = resp.usage
         return Completion(
-            parsed=resp.parsed_output,
-            text=self._response_text(resp),
+            parsed=parsed,
+            text=text,
             usage=Usage(
                 input_tokens=int(getattr(u, "input_tokens", 0) or 0),
                 output_tokens=int(getattr(u, "output_tokens", 0) or 0),

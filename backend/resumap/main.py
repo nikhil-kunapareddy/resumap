@@ -53,8 +53,8 @@ async def lifespan(app: FastAPI):
         data_dir=obs.path_str(services.paths.uploads.parent),
         log_dir=obs.path_str(services.paths.logs),
         log_level=LOG_LEVEL,
-        prompts_archived=obs._prompts_enabled(),
-        text_in_logs=obs._log_text_enabled(),
+        prompts_archived=obs.prompts_enabled(),
+        text_in_logs=obs.log_text_enabled(),
         resumes=len(services.store.resumes.all()),
     )
     yield

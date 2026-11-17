@@ -96,7 +96,7 @@ class CorrectionService(Service):
         """
         job = self._job(job_id)
         resume = self._resume(job.resume_id)
-        why = self.gateway.status()
+        why = await self.gateway.astatus()
         if why:
             raise Unavailable(why)
         message = message.strip()
@@ -123,7 +123,6 @@ class CorrectionService(Service):
         except BackendUnavailable as exc:
             raise Unavailable(str(exc)) from exc
         except Exception as exc:  # noqa: BLE001 - say why, keep the page as it was
-            obs.record_failure("pdf_chat", exc, 0.0, job_id=job_id)
             raise UpstreamFailed(f"Could not apply that: {type(exc).__name__}: {exc}") from exc
 
         blocks = {b["id"]: b for b in doc.get("blocks", [])}

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from .. import obs
 from ..domain import BoxMode, JobSummary, RewriteMode
-from ..llm import BackendUnavailable, ModelGateway
+from ..llm import ModelGateway
 from ..storage import Store
 from .base import Service
-from .errors import Invalid, Unavailable
+from .errors import Invalid
 from .results import BoxModeSaved, JobCreated, JobDetail, MappingSaved, Ok, PointsKept
 from .resumes import resume_out
 
@@ -25,10 +25,9 @@ class JobService(Service):
         if len(text.strip()) < 40:
             raise Invalid("That job description looks too short to parse.")
 
-        try:
-            parsed = await self.gateway.parse_jd(text)
-        except BackendUnavailable as exc:
-            raise Unavailable(str(exc)) from exc
+        # Never raises for a missing backend: the points come from parsing/jd.py
+        # and only their labels need a model.
+        parsed = await self.gateway.parse_jd(text)
 
         if not parsed["points"]:
             raise Invalid("Could not find any requirements in that job description.")
@@ -47,7 +46,7 @@ class JobService(Service):
             role=parsed["role"],
             points=parsed["points"],
             mode=mode,
-            source=parsed.get("source", "claude"),
+            source=parsed["source"],
             warning=parsed.get("warning"),
         )
 

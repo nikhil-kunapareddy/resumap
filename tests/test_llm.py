@@ -11,6 +11,7 @@ import asyncio
 
 import pytest
 
+from resumap import obs
 from resumap.llm import (
     BackendUnavailable,
     ModelGateway,
@@ -185,6 +186,26 @@ def test_an_unparsable_rewrite_is_reported_as_a_failed_bullet(fake, gateway):
     fake.respond("Rewrite", None)
     [res] = run(gateway.rewrite_many([{"block_id": "bul001", "args": rewrite_args()}]))
     assert res["ok"] is False and "no parsable rewrite" in res["error"]
+
+
+def test_an_unparsable_reply_counts_as_a_call_and_one_failure(fake, gateway):
+    fake.respond("Rewrite", None)
+    before = obs.totals()
+    run(gateway.rewrite_many([{"block_id": "bul001", "args": rewrite_args()}]))
+    after = obs.totals()
+    calls = before["by_op"].get("rewrite", {}).get("calls", 0)
+    assert after["by_op"]["rewrite"]["calls"] == calls + 1
+    assert after["failures"] == before["failures"] + 1
+
+
+def test_a_call_that_raises_counts_as_one_failure(fake, gateway):
+    def boom(system, user):
+        raise RuntimeError("provider timeout")
+
+    fake.respond("Rewrite", boom)
+    before = obs.totals()["failures"]
+    run(gateway.rewrite_many([{"block_id": "bul001", "args": rewrite_args()}]))
+    assert obs.totals()["failures"] == before + 1
 
 
 def test_rewriting_needs_a_backend(fake, gateway):

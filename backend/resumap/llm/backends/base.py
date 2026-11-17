@@ -9,16 +9,23 @@ structured requests, not agent loops.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import shutil
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel
 
 # How hard the model should think. Each backend maps it onto its own knob.
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
+
+# How long one model call may take, whichever backend makes it, before it is
+# abandoned and reported as failed.
+CALL_TIMEOUT_S = 300.0
 
 
 @dataclass(frozen=True)
@@ -43,8 +50,8 @@ class Completion:
     parsed: Any | None
     text: str
     usage: Usage
-    # An Anthropic request id, or a Claude Code session id -- whichever handle
-    # finds this call again in the provider's logs.
+    # Whichever handle finds this call again in the provider's logs: an
+    # Anthropic request id, or a Claude Code, Codex or pi session id.
     request_id: str | None = None
     # Backend-specific fields for the prompt archive header.
     meta: dict[str, Any] = field(default_factory=dict)
@@ -93,6 +100,44 @@ class Backend(ABC):
         """One structured request; ``parsed`` is None if nothing validated."""
 
 
+class CliBackend(Backend):
+    """A backend that drives a local command-line tool: `binary` on PATH, or the
+    path its RESUMAP_*_CLI setting names."""
+
+    binary: ClassVar[str]
+
+    def __init__(self, default_model: str, cli_path: str | None) -> None:
+        super().__init__(default_model)
+        self._cli = cli_path
+
+    def _cli_path(self) -> str | None:
+        if self._cli:
+            return self._cli if Path(self._cli).exists() else None
+        return shutil.which(self.binary)
+
+    def _require_cli(self) -> str:
+        cli = self._cli_path()
+        if cli is None:
+            raise RuntimeError(self.unavailable() or f"Could not find `{self.binary}`.")
+        return cli
+
+
+def json_lines(stdout: str) -> Iterator[dict[str, Any]]:
+    """The events of a JSONL stream, skipping lines that are not a JSON object."""
+    for line in stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(ev, dict):
+            yield ev
+
+
+def stderr_tail(stderr: str) -> str:
+    """The last line a CLI wrote to stderr: usually the one that says what went wrong."""
+    return (stderr.strip().splitlines() or ["no output"])[-1]
+
+
 def cli_env(dotenv_keys: Mapping[str, str]) -> dict[str, str]:
     """The environment for a CLI backend's subprocess.
 
@@ -109,9 +154,19 @@ def cli_env(dotenv_keys: Mapping[str, str]) -> dict[str, str]:
 
 
 async def run_cli(
-    cmd: list[str], stdin_text: str | None, *, cwd: str, env: dict[str, str], timeout: float
+    cmd: list[str],
+    stdin_text: str | None,
+    *,
+    cwd: str,
+    env: dict[str, str],
+    timeout: float = CALL_TIMEOUT_S,
 ) -> tuple[int, str, str]:
-    """Run a CLI backend once: (exit code, stdout, stderr), killed on timeout."""
+    """Run a CLI backend once: (exit code, stdout, stderr).
+
+    The child is killed if it outlives `timeout`, and also if the call is
+    cancelled (the app quitting mid-batch), so it never keeps spending the
+    plan with nobody waiting for the answer.
+    """
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=cwd,
@@ -125,9 +180,11 @@ async def run_cli(
             proc.communicate(stdin_text.encode() if stdin_text is not None else None), timeout
         )
     except asyncio.TimeoutError as exc:
-        proc.kill()
-        await proc.wait()
         raise RuntimeError(
             f"{os.path.basename(cmd[0])} gave no answer within {timeout:.0f}s"
         ) from exc
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
     return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")

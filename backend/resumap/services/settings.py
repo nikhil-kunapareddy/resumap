@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from .. import obs
@@ -150,7 +151,7 @@ class SettingsService(Service):
             self.store.settings.set("backend", name)
             self.store.settings.set(f"model.{name}", model)
         self.gateway.registry.select(name, {name: model})
-        out = self.status()
+        out = await asyncio.to_thread(self.status)
         obs.event(
             "settings.backend",
             backend=name,

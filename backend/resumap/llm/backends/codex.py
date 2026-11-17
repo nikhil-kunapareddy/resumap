@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import copy
 import json
-import shutil
 import subprocess
 import tempfile
 import time
@@ -36,15 +35,14 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
-
-TIMEOUT_S = 300
+from .base import CliBackend, Completion, Effort, Usage, cli_env, json_lines, run_cli, stderr_tail
 
 # Resumap's effort levels onto Codex's model_reasoning_effort.
 EFFORT = {"low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high"}
 
 # `codex login status` spawns a process; the status is asked for on every
-# request, so it is remembered briefly.
+# request, so a signed-in answer is remembered briefly. A signed-out one is
+# not, so the first request after `codex login` sees it.
 _LOGIN_TTL_S = 60.0
 
 
@@ -78,11 +76,7 @@ def _strict(schema: dict) -> dict:
 def _read_events(stdout: str) -> dict[str, Any]:
     """The answer, usage, thread id and error from a `codex exec --json` stream."""
     found: dict[str, Any] = {"text": "", "usage": {}, "thread": None, "error": None}
-    for line in stdout.splitlines():
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for ev in json_lines(stdout):
         kind = ev.get("type")
         if kind == "thread.started":
             found["thread"] = ev.get("thread_id")
@@ -97,24 +91,19 @@ def _read_events(stdout: str) -> dict[str, Any]:
     return found
 
 
-class CodexBackend(Backend):
+class CodexBackend(CliBackend):
     name = "codex"
     label = "Codex"
+    binary = "codex"
     # One `codex` process per call, as with Claude Code.
     concurrency = 2
 
     def __init__(self, cli_path: str | None, dotenv_keys: Mapping[str, str]) -> None:
         """No default model: Codex uses its own configured one unless the settings
         panel names another. `cli_path` is RESUMAP_CODEX_CLI, if set."""
-        super().__init__("")
-        self._cli = cli_path
+        super().__init__("", cli_path)
         self._dotenv_keys = dotenv_keys
-        self._login: dict[str, Any] = {"at": float("-inf"), "why": None}
-
-    def _cli_path(self) -> str | None:
-        if self._cli:
-            return self._cli if Path(self._cli).exists() else None
-        return shutil.which("codex")
+        self._signed_in_at = float("-inf")
 
     def unavailable(self) -> str | None:
         cli = self._cli_path()
@@ -124,24 +113,22 @@ class CodexBackend(Backend):
                 "run `codex login`, or point RESUMAP_CODEX_CLI at the binary."
             )
         now = time.monotonic()
-        if now - self._login["at"] > _LOGIN_TTL_S:
-            try:
-                res = subprocess.run(
-                    [cli, "login", "status"],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    env=cli_env(self._dotenv_keys),
-                )
-                why = (
-                    None
-                    if res.returncode == 0
-                    else ("Codex is not signed in. Run `codex login` in a terminal.")
-                )
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                why = f"Could not ask Codex whether it is signed in: {exc}"
-            self._login.update(at=now, why=why)
-        return self._login["why"]
+        if now - self._signed_in_at <= _LOGIN_TTL_S:
+            return None
+        try:
+            res = subprocess.run(
+                [cli, "login", "status"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env=cli_env(self._dotenv_keys),
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return f"Could not ask Codex whether it is signed in: {exc}"
+        if res.returncode != 0:
+            return "Codex is not signed in. Run `codex login` in a terminal."
+        self._signed_in_at = now
+        return None
 
     async def complete(
         self,
@@ -153,9 +140,7 @@ class CodexBackend(Backend):
         max_tokens: int,
         effort: Effort,
     ) -> Completion:
-        cli = self._cli_path()
-        if cli is None:
-            raise RuntimeError(self.unavailable() or "codex not found")
+        cli = self._require_cli()
         reasoning = EFFORT.get(effort, "medium")
         prompt = (
             f"{system}\n\n---\n\n{user}\n\n---\nAnswer directly with the JSON "
@@ -188,15 +173,14 @@ class CodexBackend(Backend):
                 cmd += ["-m", model]
             cmd.append("-")  # the prompt comes on stdin
             code, stdout, stderr = await run_cli(
-                cmd, prompt, cwd=tmp, env=cli_env(self._dotenv_keys), timeout=TIMEOUT_S
+                cmd, prompt, cwd=tmp, env=cli_env(self._dotenv_keys)
             )
 
         ev = _read_events(stdout)
         if ev["error"] and not ev["text"]:
             raise RuntimeError(f"Codex: {ev['error']}")
         if code != 0 and not ev["text"]:
-            tail = (stderr.strip().splitlines() or ["no output"])[-1]
-            raise RuntimeError(f"Codex exited with status {code}: {tail}")
+            raise RuntimeError(f"Codex exited with status {code}: {stderr_tail(stderr)}")
 
         parsed = None
         try:

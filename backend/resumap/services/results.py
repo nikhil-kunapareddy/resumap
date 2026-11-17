@@ -192,7 +192,7 @@ class PromptPreview(Envelope):
 
 
 class SelfCheck(Envelope):
-    """report.verify_pdf's findings. ``ok`` is null when the check itself failed."""
+    """rendering/selfcheck.verify_pdf's findings. ``ok`` is null when the check itself failed."""
 
     ok: bool | None
     pages: int | None = None

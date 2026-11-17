@@ -12,7 +12,8 @@ in the ``settings`` table and applied to the ``BackendRegistry``):
   ``codex login``; spends that ChatGPT plan's limits.
 * ``pi`` -- the local ``pi`` coding agent, routed to whichever provider and
   model pi is configured with.
-* ``api`` -- the Anthropic API with an ``ANTHROPIC_API_KEY`` from ``.env``.
+* ``api`` -- the Anthropic API, with a key pasted into Settings or an
+  ``ANTHROPIC_API_KEY`` from ``.env``.
   Billed per token.
 
 A backend is a ``Backend`` subclass: ``name``, ``label``, ``concurrency``,
