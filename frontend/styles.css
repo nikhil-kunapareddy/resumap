@@ -150,10 +150,6 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);bor
   color:var(--mute);margin:16px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--line);
 }
 .blk{padding:7px 10px;border-radius:7px;font-size:13px;margin-bottom:3px}
-.blk.name{font-size:17px;font-weight:650}
-.blk.contact,.blk.para{color:var(--mute)}
-.blk.entry{font-weight:600}
-.blk.entry .rt{float:right;font-weight:400;color:var(--mute)}
 .box{
   border:1px solid var(--line);background:var(--surface);cursor:pointer;
   display:flex;gap:9px;align-items:flex-start;margin-bottom:6px;
@@ -200,7 +196,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);bor
 
 /* Step 2 only reviews points, so the row reads as inert while its Remove
    control stays live -- hence dimming .tx rather than the whole row. */
-#jdPreview .pt{opacity:1;cursor:default}
+#jdPreview .pt{cursor:default}
 #jdPreview .pt .tx{opacity:.72}
 #jdPreview .pt.dropped{background:var(--surface-2)}
 #jdPreview .pt.dropped .tx{opacity:.4;text-decoration:line-through}
@@ -209,7 +205,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);bor
   background:var(--surface);color:var(--mute);font-size:12px;line-height:1;padding:5px 8px;
   cursor:pointer;
 }
-.ptdel:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+.ptdel:hover{color:var(--bad)}
 #jdPreview .pt.dropped .ptdel:hover{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
 
 /* ── review ────────────────────────────────────────────── */
@@ -236,7 +232,6 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);bor
 .subs{font-size:12px;padding:9px 13px;background:var(--warn-soft);color:var(--warn);border-top:1px solid var(--line)}
 .subs b{font-weight:650}
 .subs ul{margin:5px 0 0;padding-left:17px}
-.err-row{padding:11px 13px;color:var(--bad);font-size:12.5px;background:var(--bad-soft)}
 
 /* ── pdf ───────────────────────────────────────────────── */
 .pdfwrap{margin-top:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface-3)}
@@ -269,14 +264,14 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);bor
 .chat-sugg{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .chat-sugg .tiny{text-align:left}
 .chat textarea{min-height:70px}
-@media(max-width:1000px){.panel.export{grid-template-columns:1fr}.chat{position:static}}
 
 .spin{display:inline-block;width:12px;height:12px;
   border:2px solid color-mix(in srgb,currentColor 35%,transparent);
   border-top-color:currentColor;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 
-@media(max-width:1000px){.panel{grid-template-columns:1fr}.steps{overflow-x:auto}}
+/* .panel.export is named too: .panel alone loses to it on specificity. */
+@media(max-width:1000px){.panel,.panel.export{grid-template-columns:1fr}.chat{position:static}.steps{overflow-x:auto}}
 
 .box.static{cursor:default}
 .box.static:hover{border-color:var(--line);background:var(--surface)}
@@ -285,7 +280,6 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);bor
 .box.skipped{border-style:dashed;background:var(--surface-2);color:var(--mute)}
 .box.skipped .dot{opacity:.45}
 .box.skipped.sel{color:var(--ink);background:var(--accent-soft);border-style:solid}
-.legend{font-size:11.5px;color:var(--mute);margin:0 0 10px}
 
 /* ── outreach ──────────────────────────────────────────── */
 .count.over{color:var(--bad);font-weight:650}
@@ -299,7 +293,6 @@ a.btn{
 }
 a.btn:hover{border-color:var(--line-strong);background:var(--surface-2)}
 #outreachSrc{margin-top:12px;border:1px solid var(--line);border-radius:8px}
-#liText,#emBody{margin-top:10px}
 
 .trunc{
   display:inline-block;margin-left:7px;padding:1px 7px;border-radius:20px;
