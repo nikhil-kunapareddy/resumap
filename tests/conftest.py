@@ -2,7 +2,7 @@
 
 The app is built with ``create_app(paths, registry)``: its own folder per test,
 and a registry whose every backend name leads to one scripted fake. The
-environment is still set before anything imports ``app.config``, so nothing
+environment is still set before anything imports ``resumap.config``, so nothing
 can fall back to the real ``data/`` directory or a developer's ``.env``.
 """
 
@@ -38,6 +38,10 @@ from resumap.main import create_app  # noqa: E402
 from resumap.storage import Database, Store  # noqa: E402
 from tests.fakes import FakeBackend  # noqa: E402
 from tests.fixtures import resumes  # noqa: E402
+
+# The API answers only requests addressed to this machine (api/guard.py), so
+# test clients use a loopback base URL rather than TestClient's "testserver".
+LOCAL = "http://127.0.0.1"
 
 
 @pytest.fixture(scope="session")
@@ -84,7 +88,7 @@ def registry(fake) -> BackendRegistry:
 
 @pytest.fixture
 def client(paths, registry):
-    with TestClient(create_app(paths, registry)) as c:
+    with TestClient(create_app(paths, registry), base_url=LOCAL) as c:
         yield c
 
 

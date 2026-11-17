@@ -17,6 +17,7 @@ while debugging locally.
 from __future__ import annotations
 
 import contextvars
+import functools
 import getpass
 import hashlib
 import json
@@ -58,11 +59,13 @@ URL_RE = re.compile(r"https?://\S+|www\.\S+")
 # --------------------------------------------------------------------------
 
 
-def _log_text_enabled() -> bool:
+def log_text_enabled() -> bool:
+    """Whether RESUMAP_LOG_TEXT asks for text samples in the metadata log."""
     return os.getenv("RESUMAP_LOG_TEXT", "0").strip() not in ("", "0", "false", "no")
 
 
-def _prompts_enabled() -> bool:
+def prompts_enabled() -> bool:
+    """Whether RESUMAP_LOG_PROMPTS leaves the prompt archive on (the default)."""
     return os.getenv("RESUMAP_LOG_PROMPTS", "1").strip() not in ("0", "false", "no")
 
 
@@ -96,8 +99,6 @@ _LEVEL_TAG = {
 
 class ConsoleFormatter(logging.Formatter):
     """One compact line per event: time, level, area, then the fields."""
-
-    NOISY = {"run_id", "ev", "fields"}
 
     def format(self, record: logging.LogRecord) -> str:
         ev = getattr(record, "ev", "log")
@@ -154,12 +155,13 @@ def setup(log_dir: Path, level: str = "INFO") -> None:
 # --------------------------------------------------------------------------
 
 
-def event(ev: str, level: int = logging.INFO, **fields: Any) -> None:
-    """Emit one structured event. Never raises -- logging must not break a request."""
+def _emit(level: int, ev: str, fields: dict[str, Any], exc: BaseException | None = None) -> None:
+    """Write one event. Never raises -- logging must not break a request."""
     try:
         _log.log(
             level,
             ev,
+            exc_info=exc,
             extra={
                 "ev": ev,
                 "run_id": run_id_var.get(),
@@ -170,23 +172,18 @@ def event(ev: str, level: int = logging.INFO, **fields: Any) -> None:
         pass
 
 
+def event(ev: str, level: int = logging.INFO, **fields: Any) -> None:
+    """Emit one structured event."""
+    _emit(level, ev, fields)
+
+
 def warn(ev: str, **fields: Any) -> None:
-    event(ev, logging.WARNING, **fields)
+    _emit(logging.WARNING, ev, fields)
 
 
 def error(ev: str, exc: BaseException | None = None, **fields: Any) -> None:
-    try:
-        _log.error(
-            ev,
-            exc_info=exc,
-            extra={
-                "ev": ev,
-                "run_id": run_id_var.get(),
-                "fields": {k: v for k, v in fields.items() if v is not None},
-            },
-        )
-    except Exception:  # noqa: BLE001
-        pass
+    """An error event, with `exc`'s traceback when there is one."""
+    _emit(logging.ERROR, ev, fields, exc)
 
 
 def new_run_id() -> str:
@@ -227,7 +224,7 @@ def tmeta(text: str | None, prefix: str = "text") -> dict[str, Any]:
         f"{prefix}_words": len(s.split()),
         f"{prefix}_sha": hashlib.sha256(s.encode("utf-8")).hexdigest()[:8],
     }
-    if _log_text_enabled():
+    if log_text_enabled():
         out[f"{prefix}_sample"] = scrub(s)[:80]
     return out
 
@@ -296,7 +293,7 @@ def price(model: str, input_tokens: int, output_tokens: int) -> float:
 
 def record_usage(
     op: str, model: str, usage: Any, ms: float, request_id: str | None = None, **extra: Any
-) -> dict[str, Any]:
+) -> None:
     """Log one API call's tokens, cost and latency; update running totals."""
     tin = int(getattr(usage, "input_tokens", 0) or 0)
     tout = int(getattr(usage, "output_tokens", 0) or 0)
@@ -331,13 +328,6 @@ def record_usage(
         session_cost_usd=round(running, 4),
         **extra,
     )
-    return {
-        "input_tokens": tin,
-        "output_tokens": tout,
-        "cost_usd": cost,
-        "ms": ms,
-        "request_id": request_id,
-    }
 
 
 def record_failure(
@@ -375,20 +365,48 @@ def totals() -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+_ARCHIVE_DEFAULT_MB = 64.0
+
+# Bytes in each archive directory as of its last scan plus what was written
+# since, so a write needs a full scan only when it may have crossed the cap.
+_archive_bytes: dict[Path, int] = {}
+_archive_lock = threading.Lock()
+
+
 def _archive_dir(log_dir: Path) -> Path:
     d = log_dir / "prompts"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def _prune(directory: Path, cap_mb: float) -> None:
-    files = sorted(directory.glob("*.txt"), key=lambda p: p.stat().st_mtime)
-    total = sum(f.stat().st_size for f in files)
-    cap = cap_mb * 1024 * 1024
-    while files and total > cap:
-        victim = files.pop(0)
-        total -= victim.stat().st_size
-        victim.unlink(missing_ok=True)
+@functools.lru_cache(maxsize=8)
+def _archive_cap(raw: str) -> int:
+    """RESUMAP_PROMPT_ARCHIVE_MB in bytes. A value that is not a number falls
+    back to the default rather than switching pruning off."""
+    try:
+        mb = float(raw)
+    except ValueError:
+        warn("prompts.bad_archive_cap", using_mb=_ARCHIVE_DEFAULT_MB)
+        mb = _ARCHIVE_DEFAULT_MB
+    return int(mb * 1024 * 1024)
+
+
+def _prune(directory: Path, cap: int) -> int:
+    """Delete the oldest archives until the directory fits `cap`; return what is left."""
+    files = []
+    with os.scandir(directory) as it:
+        for entry in it:
+            if entry.name.endswith(".txt") and entry.is_file():
+                st = entry.stat()
+                files.append((st.st_mtime, st.st_size, entry.path))
+    files.sort()
+    total = sum(size for _, size, _ in files)
+    for _, size, path in files:
+        if total <= cap:
+            break
+        Path(path).unlink(missing_ok=True)
+        total -= size
+    return total
 
 
 def archive_prompt(
@@ -400,7 +418,7 @@ def archive_prompt(
     meta: dict[str, Any] | None = None,
 ) -> str | None:
     """Write one call's full prompt and completion. Returns the filename."""
-    if not _prompts_enabled():
+    if not prompts_enabled():
         return None
     try:
         directory = _archive_dir(log_dir)
@@ -430,9 +448,16 @@ def archive_prompt(
             "=" * 70,
             response or "",
         ]
-        path = directory / name
-        path.write_text("\n".join(body), encoding="utf-8")
-        _prune(directory, float(os.getenv("RESUMAP_PROMPT_ARCHIVE_MB", "64")))
+        data = "\n".join(body).encode("utf-8")
+        (directory / name).write_bytes(data)
+        cap = _archive_cap(os.getenv("RESUMAP_PROMPT_ARCHIVE_MB", str(_ARCHIVE_DEFAULT_MB)))
+        with _archive_lock:
+            known = _archive_bytes.get(directory)
+            if known is None or known + len(data) > cap:
+                known = _prune(directory, cap)
+            else:
+                known += len(data)
+            _archive_bytes[directory] = known
         return name
     except Exception:  # noqa: BLE001 - archiving is best-effort
         return None

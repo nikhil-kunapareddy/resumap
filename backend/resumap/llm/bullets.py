@@ -7,7 +7,7 @@ the Map step's preview alike, so the preview cannot drift from what is sent.
 from __future__ import annotations
 
 from ..domain import ExperienceKind
-from .prompts import PromptStore, with_note
+from .prompts import PromptStore, jd_point_lines, target_role, with_note
 
 # --------------------------------------------------------------------------
 # Bullet rewriting
@@ -18,7 +18,7 @@ def _prompt(
     bullet: str, section: str, jd_points: list[dict], role: str, company: str, max_chars: int = 0
 ) -> str:
     lines = [
-        f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
+        target_role(role, company),
         f"<resume_section>{section or 'unspecified'}</resume_section>",
         "<original_bullet>",
         bullet,
@@ -30,9 +30,7 @@ def _prompt(
     lines += [
         "<mapped_jd_points>",
     ]
-    for p in jd_points:
-        kw = ", ".join(p.get("keywords") or []) or "none extracted"
-        lines.append(f"- {p['text']}\n  (keywords: {kw})")
+    lines += jd_point_lines(jd_points)
     lines.append("</mapped_jd_points>")
     return "\n".join(lines)
 
@@ -77,7 +75,7 @@ def _replace_prompt(
     max_chars: int = 0,
 ) -> str:
     lines = [
-        f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
+        target_role(role, company),
         f"<resume_section>{section or 'unspecified'}</resume_section>",
         f"<entry>{entry or 'none: the bullet sits directly under the section heading'}</entry>",
         "<other_bullets>",
@@ -93,9 +91,7 @@ def _replace_prompt(
     if max_chars:
         lines.append(f"<max_length>{max_chars} characters</max_length>")
     lines.append("<mapped_jd_points>")
-    for p in jd_points:
-        kw = ", ".join(p.get("keywords") or []) or "none extracted"
-        lines.append(f"- {p['text']}\n  (keywords: {kw})")
+    lines += jd_point_lines(jd_points)
     lines.append("</mapped_jd_points>")
     return "\n".join(lines)
 
@@ -151,7 +147,7 @@ def _experience_prompt(
 ) -> str:
     kind = EXPERIENCE_KINDS.get(experience.get("kind", ""), "Other")
     lines = [
-        f"<target_role>{role or 'unspecified'} at {company or 'unspecified company'}</target_role>",
+        target_role(role, company),
         f'<experience kind="{kind}">',
     ]
     if experience.get("title"):
@@ -168,9 +164,7 @@ def _experience_prompt(
         where = f" in {p['section']}" if p.get("section") else ""
         lines.append(f'{p["id"]}: {p["kind"]} "{p["text"]}"{where}')
     lines += ["new: a section of its own", "</placements>", "<mapped_jd_points>"]
-    for p in jd_points:
-        kw = ", ".join(p.get("keywords") or []) or "none extracted"
-        lines.append(f"- {p['text']}\n  (keywords: {kw})")
+    lines += jd_point_lines(jd_points)
     lines.append("</mapped_jd_points>")
     return "\n".join(lines)
 

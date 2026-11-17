@@ -3,7 +3,7 @@
 const S = {
   status: null, resumes: [], resume: null, job: null, sel: null, step: 1, showSkipped: false,
   experiences: [], backends: [], pick: null, prompts: [], promptKind: 'rewrite',
-  examples: [],
+  examples: [], rerolling: new Map(),
 };
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -16,9 +16,27 @@ const MODE_HINTS = {
   truthful: 'Only rewording, emphasis and tone. Nothing enters the bullet that wasn’t already in it.',
 };
 
+// The statuses export applies: mirrors domain.INCLUDED_STATUSES.
+const INCLUDED = ['accepted', 'edited'];
+
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** "1 point", "3 points". */
+function plural(n, word, many = word + 's') {
+  return `${n} ${n === 1 ? word : many}`;
+}
+
+// localStorage can be blocked for this origin (site data off), and the app
+// must still work then: it only loses the remembered session and theme.
+function localGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function localSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* not remembered */ }
 }
 
 function toast(msg, kind = '', ms = 4200) {
@@ -46,15 +64,50 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/**
+ * Show a spinner on `btn` until busy(btn, false). Returns false, and changes
+ * nothing, if it is already busy: a second call would keep the spinner as the
+ * label to restore, and start the same request twice.
+ */
 function busy(btn, on, label) {
   if (on) {
+    if (btn.dataset.busy) return false;
+    btn.dataset.busy = '1';
     btn.dataset.label = btn.innerHTML;
     btn.innerHTML = '<span class="spin"></span>' + (label || 'Working…');
     btn.disabled = true;
-  } else {
-    btn.innerHTML = btn.dataset.label || btn.innerHTML;
-    btn.disabled = false;
+    return true;
   }
+  if (!btn.dataset.busy) return false;
+  delete btn.dataset.busy;
+  btn.innerHTML = btn.dataset.label || btn.innerHTML;
+  btn.disabled = false;
+  return true;
+}
+
+/**
+ * Run `fn` with `btn` busy, and hand a failure to `onErr` (a toast unless
+ * given), whose return value becomes the result. Does nothing, and resolves
+ * undefined, while `btn` is already busy.
+ */
+async function withBusy(btn, label, fn, onErr = (e) => toast(e.message, 'err')) {
+  if (!busy(btn, true, label)) return undefined;
+  try {
+    return await fn();
+  } catch (e) {
+    return onErr(e);
+  } finally {
+    busy(btn, false);
+  }
+}
+
+/**
+ * The job on screen if it is still `job`, else null. A slow call writes its
+ * answer through this, so it never lands in a job the user has since left.
+ * By id, since a reload replaces the object for the same job.
+ */
+function stillOn(job) {
+  return job && S.job && S.job.id === job.id ? S.job : null;
 }
 
 // ── navigation ──────────────────────────────────────────────
@@ -81,26 +134,37 @@ function setStep(n) {
 const SESSION_KEY = 'resumap.session';
 
 function saveSession() {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({
+  localSet(SESSION_KEY, JSON.stringify({
     resume: S.resume?.id ?? null, job: S.job?.id ?? null, step: S.step,
   }));
+}
+
+/** The furthest of steps 1..n that can be shown: 2 and up need a resume, 3 and up a job. */
+function reachableStep(n) {
+  if (!S.resume) return 1;
+  if (n >= 3 && !S.job) return 2;
+  return n;
 }
 
 /** Put the resume and job from the last visit back. Returns the step to show. */
 async function restoreSession() {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { /* none */ }
+  try { saved = JSON.parse(localGet(SESSION_KEY) || 'null'); } catch (e) { /* none */ }
   if (!saved?.resume || !S.resumes.some((r) => r.id === saved.resume)) return 1;
-  S.resume = await api(`/api/resumes/${saved.resume}`);
+  // A job comes with its resume, so with a saved job one request is enough.
+  let job = null;
   if (saved.job) {
     try {
-      const j = await api(`/api/jobs/${saved.job}`);
-      if (j.resume_id === S.resume.id) loadJob(j);
+      job = await api(`/api/jobs/${saved.job}`);
     } catch (e) { /* the job is gone; start from its resume */ }
   }
-  const step = saved.step || 1;
-  if (step >= 3 && !S.job) return 2;
-  return step;
+  if (job && job.resume_id === saved.resume && job.resume) {
+    S.resume = job.resume;
+    loadJob(job);
+  } else {
+    S.resume = await api(`/api/resumes/${saved.resume}`);
+  }
+  return reachableStep(saved.step || 1);
 }
 
 /** Make a job from the server the one on screen. */
@@ -110,18 +174,14 @@ function loadJob(j) {
   $('#role').value = j.role || '';
   $('#mode').value = j.mode;
   $('#modeHint').textContent = MODE_HINTS[j.mode] || '';
-  if (j.raw != null) $('#jdText').value = j.raw;
+  $('#jdText').value = j.raw;
   renderJd();
 }
 
 /** Re-fetch everything the current step shows, without a page reload. */
-async function reloadStep(btn) {
-  busy(btn, true, 'Reloading…');
-  try {
-    await loadStatus();
-    await loadExperiences();
-    await loadExamples();
-    await loadResumes();
+function reloadStep(btn) {
+  return withBusy(btn, 'Reloading…', async () => {
+    await Promise.all([loadStatus(), loadExperiences(), loadExamples()]);
     if (S.resume) {
       try {
         S.resume = await api(`/api/resumes/${S.resume.id}`);
@@ -138,14 +198,9 @@ async function reloadStep(btn) {
     }
     await loadResumes();
     renderResumePreview();
-    const step = S.step >= 3 && !S.job ? (S.resume ? 2 : 1) : (S.step >= 2 && !S.resume ? 1 : S.step);
-    setStep(step);
+    setStep(reachableStep(S.step));
     toast('Reloaded from the server.', 'ok', 1800);
-  } catch (e) {
-    toast(e.message, 'err');
-  } finally {
-    busy(btn, false);
-  }
+  });
 }
 
 // ── status ──────────────────────────────────────────────────
@@ -161,6 +216,20 @@ function renderStatus() {
   b.className = 'badge ' + (S.status.ready ? 'ok' : 'bad');
   b.title = S.status.detail || '';
   $('#modelBadge').textContent = S.status.model;
+  $('#quitApp').classList.toggle('hidden', !S.status.can_quit);
+}
+
+/** Stop the server (the packaged app has no terminal), then say so in place of the UI. */
+async function quitApp() {
+  if (!confirm('Quit Resumap? Everything is already saved. Open the app again to come back.')) return;
+  try {
+    await api('/api/quit', { method: 'POST' });
+  } catch (e) { toast(e.message, 'err'); return; }
+  document.body.innerHTML = `
+    <div class="stopped">
+      <h2>Resumap has stopped</h2>
+      <p class="hint">You can close this tab. Open Resumap again to pick up where you left off.</p>
+    </div>`;
 }
 
 /** What to call the live backend in a busy label or a prompt. */
@@ -176,7 +245,7 @@ const BACKEND_NOTES = {
   claude_code: 'Your local Claude Code install and its sign-in, usually a Claude subscription.',
   codex: 'The OpenAI Codex CLI, signed in with `codex login`, usually a ChatGPT plan.',
   pi: 'The pi coding agent, with whichever provider and model pi is set up for.',
-  api: 'The Anthropic API, with ANTHROPIC_API_KEY from .env. Billed per token.',
+  api: 'The Anthropic API, with your own API key. Billed per token.',
 };
 const MODEL_HINTS = {
   claude_code: 'e.g. claude-opus-5',
@@ -186,7 +255,7 @@ const MODEL_HINTS = {
 };
 
 function themeChoice() {
-  return localStorage.getItem(THEME_KEY) || 'system';
+  return localGet(THEME_KEY) || 'system';
 }
 
 function applyTheme(choice) {
@@ -204,6 +273,7 @@ async function openSettings() {
     const r = await api('/api/backends');
     S.backends = r.backends;
     S.pick = r.selected;
+    S.modelFor = null;   // fill the model field afresh from what is saved
     renderBackends();
   } catch (e) { setMsg('#backendMsg', e.message, 'err'); }
 }
@@ -227,6 +297,9 @@ function pendingBackend() {
  */
 async function dismissSettings() {
   if (S.savingSettings) return;
+  // Esc leaves without blurring the key field, so its change event never fires.
+  if ($('#backendKey').value.trim()) S.keySave = saveKey($('#backendKey').value);
+  if (S.keySave) await S.keySave;
   if (!pendingBackend() || S.discardSettings) {
     S.discardSettings = false;
     closeSettings();
@@ -261,52 +334,94 @@ function renderBackends() {
     renderBackends();
   }));
   const b = S.backends.find((x) => x.name === S.pick);
-  $('#backendModel').value = b ? b.model : '';
+  // Only for a newly picked backend: re-rendering after a key save must not
+  // wipe a model typed into the field but not saved yet.
+  if (S.modelFor !== S.pick) {
+    $('#backendModel').value = b ? b.model : '';
+    S.modelFor = S.pick;
+  }
   $('#backendModel').placeholder = b ? (b.default_model || 'CLI default') : '';
   $('#modelHint').textContent = MODEL_HINTS[S.pick] ? `(${MODEL_HINTS[S.pick]})` : '';
+  renderKeyField(b);
 }
 
-async function saveBackend(btn) {
-  // The server tests the choice with one real call before switching to it.
-  busy(btn, true, 'Checking…');
+/** The API key field, for a backend that takes one. The key is never sent back. */
+function renderKeyField(b) {
+  const takesKey = !!b?.accepts_key;
+  $('#keyField').classList.toggle('hidden', !takesKey);
+  $('#removeKey').classList.toggle('hidden', !takesKey || b.key_source !== 'settings');
+  if (!takesKey) return;
+  const [placeholder, hint] = {
+    settings: ['Saved. Paste a new key to replace it', '(saved on this computer)'],
+    environment: ['Using ANTHROPIC_API_KEY from .env or the shell', '(a key pasted here wins over it)'],
+  }[b.key_source] || ['sk-ant-…', '(from console.anthropic.com; saved on this computer only)'];
+  $('#backendKey').placeholder = placeholder;
+  $('#keyHint').textContent = hint;
+}
+
+/** Save (or, given '', remove) the picked backend's key. Resolves true on success. */
+async function saveKey(raw) {
+  const key = raw.trim();
+  $('#backendKey').value = '';
   try {
-    S.status = await api('/api/backends', {
-      method: 'POST', body: JSON.stringify({ backend: S.pick, model: $('#backendModel').value.trim() }),
-    });
-    renderStatus();
-    S.backends = (await api('/api/backends')).backends;
+    const r = await api(`/api/backends/${S.pick}/key`, { method: 'PUT', body: JSON.stringify({ key }) });
+    S.backends = r.backends;
+    S.discardSettings = false;
     renderBackends();
-    setMsg('#backendMsg', S.status.ready
-      ? `Now using ${S.status.label} (${S.status.model}).`
-      : `Switched to ${S.status.label}, but it is not ready: ${S.status.detail}`,
-    S.status.ready ? 'ok' : 'warn');
+    setMsg('#backendMsg', key ? 'Key saved. Press Test to check it can answer.' : 'Saved key removed.', 'ok');
     return true;
   } catch (e) {
     setMsg('#backendMsg', e.message, 'err');
     return false;
   } finally {
-    busy(btn, false);
+    S.keySave = null;
   }
 }
 
+/**
+ * Switch to the picked backend and model. Resolves true on success. A save
+ * already under way is shared, not repeated, so clicking "Use this backend"
+ * and then leaving the dialog makes one test call, not two.
+ */
+function saveBackend(btn) {
+  S.backendSave ||= (async () => {
+    if (S.keySave) await S.keySave;
+    // The server tests the choice with one real call before switching to it.
+    return withBusy(btn, 'Checking…', async () => {
+      S.status = await api('/api/backends', {
+        method: 'POST', body: JSON.stringify({ backend: S.pick, model: $('#backendModel').value.trim() }),
+      });
+      renderStatus();
+      S.backends = (await api('/api/backends')).backends;
+      renderBackends();
+      setMsg('#backendMsg', S.status.ready
+        ? `Now using ${S.status.label} (${S.status.model}).`
+        : `Switched to ${S.status.label}, but it is not ready: ${S.status.detail}`,
+      S.status.ready ? 'ok' : 'warn');
+      return true;
+    }, (e) => { setMsg('#backendMsg', e.message, 'err'); return false; });
+  })().finally(() => { S.backendSave = null; });
+  return S.backendSave;
+}
+
 async function testBackend(btn) {
-  busy(btn, true, 'Testing…');
+  if (S.keySave) await S.keySave;
   setMsg('#backendMsg', '');
-  try {
+  await withBusy(btn, 'Testing…', async () => {
     const r = await api(`/api/backends/${S.pick}/test`, {
       method: 'POST', body: JSON.stringify({ model: $('#backendModel').value.trim() }),
     });
     setMsg('#backendMsg', r.detail, r.ok ? 'ok' : 'err');
-  } catch (e) {
-    setMsg('#backendMsg', e.message, 'err');
-  } finally {
-    busy(btn, false);
-  }
+  }, (e) => setMsg('#backendMsg', e.message, 'err'));
 }
 
 // ── step 1: resumes ─────────────────────────────────────────
 async function loadResumes() {
   S.resumes = await api('/api/resumes');
+  renderResumeList();
+}
+
+function renderResumeList() {
   const el = $('#resumeList');
   if (!S.resumes.length) {
     el.innerHTML = '<p class="hint">Nothing stored yet.</p>';
@@ -316,7 +431,7 @@ async function loadResumes() {
     <div class="res-item ${S.resume && S.resume.id === r.id ? 'sel' : ''}" data-id="${r.id}">
       <div>
         <div class="nm">${esc(r.label)}</div>
-        <div class="sub">${r.job_count} job${r.job_count === 1 ? '' : 's'} tailored</div>
+        <div class="sub">${plural(r.job_count, 'job')} tailored</div>
       </div>
       <div class="sp"></div>
       <button class="tiny del" data-id="${r.id}">Delete</button>
@@ -325,27 +440,34 @@ async function loadResumes() {
   el.querySelectorAll('.res-item').forEach((n) =>
     n.addEventListener('click', (e) => {
       if (e.target.classList.contains('del')) return;
-      selectResume(+n.dataset.id);
+      selectResume(+n.dataset.id).catch((err) => toast(err.message, 'err'));
     }));
   el.querySelectorAll('.del').forEach((n) =>
     n.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!confirm('Delete this resume and all of its tailored jobs?')) return;
-      await api(`/api/resumes/${n.dataset.id}`, { method: 'DELETE' });
-      if (S.resume && S.resume.id === +n.dataset.id) { S.resume = null; S.job = null; saveSession(); }
-      await loadResumes();
-      renderResumePreview();
+      try {
+        await api(`/api/resumes/${n.dataset.id}`, { method: 'DELETE' });
+        if (S.resume && S.resume.id === +n.dataset.id) { S.resume = null; S.job = null; saveSession(); }
+        await loadResumes();
+        renderResumePreview();
+      } catch (err) { toast(err.message, 'err'); }
     }));
 }
 
-async function selectResume(id) {
-  S.resume = await api(`/api/resumes/${id}`);
+/** Make `r` the resume on screen, with no job yet. */
+async function showResume(r) {
+  S.resume = r;
   S.job = null;
   S.sel = null;
   saveSession();
-  await loadResumes();
+  await loadResumes();   // marks the selection, with fresh job counts
   renderResumePreview();
-  setMsg('#uploadMsg', `Loaded "${S.resume.label}".`, 'ok');
+  setMsg('#uploadMsg', `Loaded "${r.label}".`, 'ok');
+}
+
+async function selectResume(id) {
+  await showResume(await api(`/api/resumes/${id}`));
 }
 
 function blockHtml(b, interactive) {
@@ -383,8 +505,16 @@ function blockHtml(b, interactive) {
  */
 function visibleBlock(b, interactive) {
   if (b.mappable) return true;
-  if (!interactive || !S.showSkipped) return false;
-  return (b.kind === 'bullet' || b.kind === 'para') && b.text.length >= 15;
+  return interactive && S.showSkipped && isSkippedLine(b);
+}
+
+/** A line the parser did not count as a point but "Show skipped lines" offers anyway. */
+function isSkippedLine(b) {
+  return !b.mappable && (b.kind === 'bullet' || b.kind === 'para') && b.text.length >= 15;
+}
+
+function pointCount() {
+  return S.resume.blocks.filter((b) => b.mappable).length;
 }
 
 function renderBlocks(target, interactive) {
@@ -453,8 +583,7 @@ function renderExperiences() {
 async function addExperience(btn) {
   const text = $('#expText').value.trim();
   if (!text) return setMsg('#expMsg', 'Describe the experience first.', 'err');
-  busy(btn, true, 'Saving…');
-  try {
+  await withBusy(btn, 'Saving…', async () => {
     const e = await api('/api/experiences', {
       method: 'POST',
       body: JSON.stringify({ kind: $('#expKind').value, title: $('#expTitle').value, text }),
@@ -464,11 +593,7 @@ async function addExperience(btn) {
     $('#expText').value = '';
     renderExperiences();
     setMsg('#expMsg', 'Saved. It shows up on the Map step for every job.', 'ok');
-  } catch (err) {
-    setMsg('#expMsg', err.message, 'err');
-  } finally {
-    busy(btn, false);
-  }
+  }, (err) => setMsg('#expMsg', err.message, 'err'));
 }
 
 async function deleteExperience(id) {
@@ -480,7 +605,7 @@ async function deleteExperience(id) {
     // The server unpicked it everywhere; mirror that for the job on screen.
     if (S.job) {
       delete S.job.mappings[e.key];
-      if (S.job.rewrites) delete S.job.rewrites[e.key];
+      delete S.job.rewrites[e.key];
       if (S.sel === e.key) S.sel = null;
     }
     renderExperiences();
@@ -492,8 +617,7 @@ async function deleteExperience(id) {
 function renderResumePreview() {
   renderBlocks('#resumePreview', false);
   if (!S.resume) { $('#blockCount').textContent = ''; return; }
-  const pts = S.resume.blocks.filter((b) => b.mappable).length;
-  $('#blockCount').textContent = `${pts} point${pts === 1 ? '' : 's'}`;
+  $('#blockCount').textContent = plural(pointCount(), 'point');
 }
 
 async function upload(file) {
@@ -501,9 +625,8 @@ async function upload(file) {
   fd.append('file', file);
   setMsg('#uploadMsg', 'Parsing…');
   try {
-    const r = await api('/api/resumes', { method: 'POST', body: fd });
-    await loadResumes();
-    await selectResume(r.id);
+    // The upload answers with the parsed resume, so there is nothing to fetch.
+    await showResume(await api('/api/resumes', { method: 'POST', body: fd }));
     toast('Resume stored and parsed.', 'ok');
   } catch (e) {
     setMsg('#uploadMsg', e.message, 'err');
@@ -514,9 +637,8 @@ async function upload(file) {
 async function parseJd(btn) {
   const text = $('#jdText').value.trim();
   if (text.length < 40) return setMsg('#jdMsg', 'Paste the job description first.', 'err');
-  busy(btn, true, 'Parsing…');
-  setMsg('#jdMsg', '');
-  try {
+  await withBusy(btn, 'Parsing…', async () => {
+    setMsg('#jdMsg', '');
     const j = await api('/api/jobs', {
       method: 'POST',
       body: JSON.stringify({ resume_id: S.resume.id, text, mode: $('#mode').value }),
@@ -530,11 +652,14 @@ async function parseJd(btn) {
     if (j.warning) setMsg('#jdMsg', j.warning, 'warn');
     else setMsg('#jdMsg', `Found ${j.points.length} points, word for word from your paste.`, 'ok');
     toast(`Parsed ${j.points.length} JD points.`, 'ok');
-  } catch (e) {
-    setMsg('#jdMsg', e.message, 'err');
-  } finally {
-    busy(btn, false);
-  }
+  }, (e) => setMsg('#jdMsg', e.message, 'err'));
+}
+
+/** A JD point's id, category, text and keywords: the same on steps 2 and 3. */
+function pointBody(p) {
+  return `<div class="cat">${esc(p.id)} &middot; ${esc(p.category.replace('_', ' '))}</div>
+        ${esc(p.text)}
+        ${p.keywords?.length ? `<div class="kw">${p.keywords.map((k) => `<span>${esc(k)}</span>`).join('')}</div>` : ''}`;
 }
 
 function keptPoints() {
@@ -548,12 +673,8 @@ function renderJd() {
   const gone = S.job.points.length - kept;
   $('#pointCount').textContent = `${kept} points${gone ? ` \u00b7 ${gone} removed` : ''}`;
   el.innerHTML = S.job.points.map((p) => `
-    <div class="pt ${p.dropped ? 'dropped' : 'disabled'}">
-      <div class="tx">
-        <div class="cat">${esc(p.id)} &middot; ${esc(p.category.replace('_', ' '))}</div>
-        ${esc(p.text)}
-        ${p.keywords?.length ? `<div class="kw">${p.keywords.map((k) => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
-      </div>
+    <div class="pt ${p.dropped ? 'dropped' : ''}">
+      <div class="tx">${pointBody(p)}</div>
       <button class="ptdel" data-id="${p.id}" data-keep="${p.dropped ? '1' : '0'}"
         title="${p.dropped ? 'Put this point back' : 'Remove this point before mapping'}"
         >${p.dropped ? 'Undo' : 'Remove'}</button>
@@ -572,9 +693,14 @@ async function keepPoint(id, keep) {
     S.job.points = r.points;
     renderJd();
     if (r.unwired) {
-      // Dropping a mapped point unpicks it server-side; resync so step 3 agrees.
-      S.job.mappings = (await api(`/api/jobs/${S.job.id}`)).mappings;
-      toast(`Removed ${id} and unpicked ${r.unwired} mapping${r.unwired === 1 ? '' : 's'}.`, 'ok');
+      // Dropping a mapped point unpicks it server-side; do the same here so
+      // step 3 agrees. A box left with no points is unmapped, as on the server.
+      const gone = new Set(r.points.filter((p) => p.dropped).map((p) => p.id));
+      for (const [box, pts] of Object.entries(S.job.mappings)) {
+        const left = pts.filter((p) => !gone.has(p));
+        if (left.length) S.job.mappings[box] = left; else delete S.job.mappings[box];
+      }
+      toast(`Removed ${id} and unpicked ${plural(r.unwired, 'mapping')}.`, 'ok');
     } else {
       toast(keep ? `Restored ${id}.` : `Removed ${id}.`, 'ok');
     }
@@ -583,24 +709,34 @@ async function keepPoint(id, keep) {
   }
 }
 
+/** Save the job's company, role or mode; on failure, put the field back. */
 async function saveJobField(field, value) {
-  if (!S.job) return;
-  S.job[field] = value;
-  await api(`/api/jobs/${S.job.id}`, { method: 'PATCH', body: JSON.stringify({ [field]: value }) });
+  const job = S.job;
+  if (!job) return;
+  const before = job[field];
+  job[field] = value;
+  try {
+    await api(`/api/jobs/${job.id}`, { method: 'PATCH', body: JSON.stringify({ [field]: value }) });
+  } catch (e) {
+    job[field] = before;
+    if (stillOn(job) === job) {
+      $(`#${field}`).value = before ?? '';
+      if (field === 'mode') $('#modeHint').textContent = MODE_HINTS[before] || '';
+    }
+    toast(e.message, 'err');
+  }
 }
 
 // ── step 3: mapping ─────────────────────────────────────────
 function renderMap() {
   renderBlocks('#mapBlocks', true);
-  const pts = S.resume.blocks.filter((b) => b.mappable).length;
-  const skipped = S.resume.blocks.filter(
-    (b) => !b.mappable && (b.kind === 'bullet' || b.kind === 'para') && b.text.length >= 15).length;
+  const skipped = S.resume.blocks.filter(isSkippedLine).length;
   const nx = S.experiences.length;
-  $('#mapPointCount').textContent = `${pts} point${pts === 1 ? '' : 's'}${
-    nx ? ` · ${nx} experience${nx === 1 ? '' : 's'}` : ''}`;
+  $('#mapPointCount').textContent = `${plural(pointCount(), 'point')}${
+    nx ? ` · ${plural(nx, 'experience')}` : ''}`;
   $('#toggleSkipped').textContent = S.showSkipped
     ? 'Hide skipped lines'
-    : `Show ${skipped} skipped line${skipped === 1 ? '' : 's'}`;
+    : `Show ${plural(skipped, 'skipped line')}`;
   const el = $('#mapPoints');
   if (!S.job) return;
 
@@ -621,11 +757,7 @@ function renderMap() {
     const on = active && active.includes(p.id);
     return `<label class="pt ${on ? 'on' : ''} ${S.sel ? '' : 'disabled'}" data-id="${p.id}">
         <input type="checkbox" ${on ? 'checked' : ''} ${S.sel ? '' : 'disabled'}>
-        <div class="tx">
-          <div class="cat">${esc(p.id)} &middot; ${esc(p.category.replace('_', ' '))}</div>
-          ${esc(p.text)}
-          ${p.keywords?.length ? `<div class="kw">${p.keywords.map((k) => `<span>${esc(k)}</span>`).join('')}</div>` : ''}
-        </div>
+        <div class="tx">${pointBody(p)}</div>
         ${counts[p.id] ? `<span class="usage">${counts[p.id]}&times;</span>` : ''}
       </label>`;
   }).join('');
@@ -635,23 +767,32 @@ function renderMap() {
 
   const mappedBoxes = Object.values(S.job.mappings).filter((v) => v.length).length;
   const links = Object.values(S.job.mappings).flat().length;
-  $('#mapSummary').textContent = `${mappedBoxes} box${mappedBoxes === 1 ? '' : 'es'}, ${links} link${links === 1 ? '' : 's'}`;
-  $('#runTransform').disabled = !mappedBoxes;
+  $('#mapSummary').textContent = `${plural(mappedBoxes, 'box', 'boxes')}, ${plural(links, 'link')}`;
+  // Stays disabled while a transform runs: this re-renders on every click.
+  const run = $('#runTransform');
+  run.disabled = !mappedBoxes || !!run.dataset.busy;
 }
 
 async function toggleMap(pointId, on) {
-  if (!S.sel) return;
-  const cur = new Set(S.job.mappings[S.sel] || []);
+  const job = S.job;
+  const box = S.sel;
+  if (!box) return;
+  const before = job.mappings[box];
+  const cur = new Set(before || []);
   on ? cur.add(pointId) : cur.delete(pointId);
-  const ids = S.job.points.map((p) => p.id).filter((id) => cur.has(id));
-  S.job.mappings[S.sel] = ids;
+  const ids = job.points.map((p) => p.id).filter((id) => cur.has(id));
+  job.mappings[box] = ids;
   renderMap();
   try {
-    await api(`/api/jobs/${S.job.id}/mappings`, {
+    await api(`/api/jobs/${job.id}/mappings`, {
       method: 'POST',
-      body: JSON.stringify({ block_id: S.sel, point_ids: ids }),
+      body: JSON.stringify({ block_id: box, point_ids: ids }),
     });
-  } catch (e) { toast(e.message, 'err'); }
+  } catch (e) {
+    if (before) job.mappings[box] = before; else delete job.mappings[box];
+    if (stillOn(job) === job && S.step === 3) renderMap();
+    toast(e.message, 'err');
+  }
 }
 
 function isReplaced(id) {
@@ -681,23 +822,37 @@ function promptKindOf(id) {
   return isReplaced(id) ? 'replace' : 'rewrite';
 }
 
+/** Transform every mapped box, or re-roll `blockIds` from the Review step. */
 async function runTransform(btn, blockIds, extra) {
-  busy(btn, true, `Calling ${agentName()}…`);
-  try {
-    const r = await api(`/api/jobs/${S.job.id}/transform`, {
-      method: 'POST',
-      body: JSON.stringify({ block_ids: blockIds || null, extra: extra || '' }),
-    });
-    S.job.rewrites = r.rewrites;
-    const failed = r.results.filter((x) => !x.ok);
-    if (failed.length) toast(`${failed.length} rewrite(s) failed: ${failed[0].error}`, 'err', 7000);
-    else toast(`Rewrote ${r.results.length} bullet${r.results.length === 1 ? '' : 's'}.`, 'ok');
-    setStep(4);
-  } catch (e) {
+  const job = S.job;
+  const label = `Calling ${agentName()}…`;
+  // A Review card is rebuilt whenever another card changes, so a re-roll's
+  // busy state is kept here, where renderReview can find it again.
+  const rerolls = blockIds || [];
+  if (rerolls.some((id) => S.rerolling.has(id))) return;
+  await withBusy(btn, label, async () => {
+    rerolls.forEach((id) => S.rerolling.set(id, label));
+    try {
+      const r = await api(`/api/jobs/${job.id}/transform`, {
+        method: 'POST',
+        body: JSON.stringify({ block_ids: blockIds || null, extra: extra || '' }),
+      });
+      const failed = r.results.filter((x) => !x.ok);
+      if (failed.length) toast(`${failed.length} rewrite(s) failed: ${failed[0].error}`, 'err', 7000);
+      else toast(`Rewrote ${plural(r.results.length, 'bullet')}.`, 'ok');
+      const cur = stillOn(job);
+      if (cur) {
+        cur.rewrites = r.rewrites;
+        rerolls.forEach((id) => S.rerolling.delete(id));
+        setStep(4);
+      }
+    } finally {
+      rerolls.forEach((id) => S.rerolling.delete(id));
+    }
+  }, (e) => {
     toast(e.message, 'err', 7000);
-  } finally {
-    busy(btn, false);
-  }
+    if (rerolls.length && stillOn(job) && S.step === 4) renderReview();
+  });
 }
 
 // ── step 3: transform prompt ────────────────────────────────
@@ -763,7 +918,17 @@ function markPrompt(p) {
   el.querySelector('.reset').disabled = !p.custom;
 }
 
-async function savePrompt(key, text) {
+/**
+ * Saves run one after another, each checking against what the one before it
+ * stored. Closing the dialog blurs a textarea, so its change event and the
+ * flush would otherwise both save the same edit.
+ */
+function savePrompt(key, text) {
+  S.promptSaves = (S.promptSaves || Promise.resolve()).then(() => putPrompt(key, text));
+  return S.promptSaves;
+}
+
+async function putPrompt(key, text) {
   const cur = S.prompts.find((x) => x.key === key);
   if (cur && text === cur.text) return;
   try {
@@ -808,8 +973,21 @@ async function loadPromptPreview() {
 }
 
 // ── step 4: review ──────────────────────────────────────────
-function renderReview() {
+/**
+ * Every card, rebuilt. Text typed into a card but not saved yet survives the
+ * rebuild (accepting another card, say) as long as that card's own rewrite is
+ * unchanged. A card that was re-rolled, saved, accepted or rejected (`fresh`,
+ * even if it already was) shows what the server now holds.
+ */
+function renderReview(fresh) {
   const el = $('#reviewList');
+  const drafts = {};
+  el.querySelectorAll('.rev').forEach((card) => {
+    const ta = card.querySelector('.ta');
+    if (ta && ta.value !== ta.defaultValue && card.dataset.id !== fresh) {
+      drafts[card.dataset.id] = { was: ta.dataset.was, status: card.dataset.status, text: ta.value };
+    }
+  });
   const rws = S.job?.rewrites || {};
   const ids = Object.keys(rws);
   if (!ids.length) {
@@ -824,19 +1002,20 @@ function renderReview() {
     ...S.resume.blocks.map((b) => b.id).filter((id) => ids.includes(id)),
     ...ids.filter((id) => exps[id]).sort(),
   ];
-  const accepted = ids.filter((i) => ['accepted', 'edited'].includes(rws[i].status)).length;
+  const accepted = ids.filter((i) => INCLUDED.includes(rws[i].status)).length;
   $('#reviewCount').textContent = `${accepted} of ${ids.length} will be applied`;
 
   el.innerHTML = order.map((id) => {
     const rw = rws[id];
     const b = blocks[id] || {};
-    const meta = rw.meta || {};
+    const meta = rw.meta;
+    const rolling = S.rerolling.get(id);   // the label of a re-roll still running
     const subs = (meta.substitutions || []).filter((s) => !s.grounded);
     const risky = meta.defensible === false;
     const exp = exps[id];
     const sec = exp ? `new bullet · ${KIND_LABELS[exp.kind] || 'experience'}` : (b.section || 'resume');
     const replaced = !exp && meta.replaced;
-    return `<div class="rev ${rw.status}" data-id="${id}">
+    return `<div class="rev ${rw.status}" data-id="${id}" data-status="${rw.status}">
       <div class="rev-head">
         <span class="sec">${esc(sec)}</span>
         <span>${(S.job.mappings[id] || []).join(', ') || 'unmapped'}</span>
@@ -848,7 +1027,7 @@ function renderReview() {
       </div>
       <div class="sbs">
         <div><div class="lbl">${exp ? 'Your notes' : replaced ? 'Original (replaced)' : 'Original'}</div>${esc(rw.original)}</div>
-        <div><div class="lbl">Tailored</div><textarea class="ta">${esc(rw.rewritten)}</textarea></div>
+        <div><div class="lbl">Tailored</div><textarea class="ta" data-was="${esc(rw.rewritten)}">${esc(rw.rewritten)}</textarea></div>
       </div>
       ${subs.length ? `<div class="subs"><b>Introduced, not in your original:</b><ul>${
         subs.map((s) => `<li>${esc(s.replacement)}${s.original ? ` (was: ${esc(s.original)})` : ''} — ${esc(s.note)}</li>`).join('')
@@ -858,14 +1037,20 @@ function renderReview() {
         <button class="tiny primary act" data-a="accepted">Accept</button>
         <button class="tiny act" data-a="rejected">Reject</button>
         <button class="tiny save">Save edit</button>
-        <button class="tiny reroll">Re-roll</button>
-        <button class="tiny reroll-note">Re-roll with a note…</button>
+        <button class="tiny reroll" ${rolling ? 'disabled' : ''}>${
+          rolling ? `<span class="spin"></span>${esc(rolling)}` : 'Re-roll'}</button>
+        <button class="tiny reroll-note" ${rolling ? 'disabled' : ''}>Re-roll with a note…</button>
       </div>
     </div>`;
   }).join('');
 
   el.querySelectorAll('.rev').forEach((card) => {
     const id = card.dataset.id;
+    const draft = drafts[id];
+    // Set as the value, not the markup, so the card still reads as unsaved.
+    if (draft && draft.was === rws[id].rewritten && draft.status === rws[id].status) {
+      card.querySelector('.ta').value = draft.text;
+    }
     card.querySelectorAll('.act').forEach((btn) =>
       btn.addEventListener('click', () => patchRewrite(id, { status: btn.dataset.a })));
     card.querySelector('.placement')?.addEventListener('change', (e) =>
@@ -873,10 +1058,11 @@ function renderReview() {
     card.querySelector('.save').addEventListener('click', () =>
       patchRewrite(id, { text: card.querySelector('.ta').value, status: 'edited' }));
     card.querySelector('.reroll').addEventListener('click', (e) =>
-      runTransform(e.target, [id], ''));
+      runTransform(e.currentTarget, [id], ''));
     card.querySelector('.reroll-note').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
       const note = prompt(`What should ${agentName()} do differently for this bullet?`);
-      if (note) runTransform(e.target, [id], note);
+      if (note) runTransform(btn, [id], note);
     });
   });
 }
@@ -900,25 +1086,40 @@ function placementOptions(current) {
 }
 
 async function patchRewrite(blockId, body) {
+  const job = S.job;
   try {
-    const rw = await api(`/api/jobs/${S.job.id}/rewrites/${blockId}`, {
+    const rw = await api(`/api/jobs/${job.id}/rewrites/${blockId}`, {
       method: 'PATCH', body: JSON.stringify(body),
     });
-    S.job.rewrites[blockId] = rw;
+    const cur = stillOn(job);
+    if (!cur) return;
+    cur.rewrites[blockId] = rw;
+    renderReview(body.status ? blockId : undefined);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function acceptAll() {
+  const job = S.job;
+  try {
+    const rws = await api(`/api/jobs/${job.id}/accept-all`, { method: 'POST' });
+    const cur = stillOn(job);
+    if (!cur) return;
+    cur.rewrites = rws;
     renderReview();
   } catch (e) { toast(e.message, 'err'); }
 }
 
 // ── step 5: export ──────────────────────────────────────────
 async function refreshPreview() {
-  if (!S.job) return;
-  $('#pdf').src = `/api/jobs/${S.job.id}/preview.pdf?t=${Date.now()}`;
-  const rws = S.job.rewrites || {};
-  const n = Object.values(rws).filter((r) => ['accepted', 'edited'].includes(r.status)).length;
-  let msg = `${n} rewrite${n === 1 ? '' : 's'} applied out of ${Object.keys(rws).length}.`;
+  const job = S.job;
+  if (!job) return;
+  $('#pdf').src = `/api/jobs/${job.id}/preview.pdf?t=${Date.now()}`;
+  const rws = job.rewrites;
+  const n = Object.values(rws).filter((r) => INCLUDED.includes(r.status)).length;
+  let msg = `${plural(n, 'rewrite')} applied out of ${Object.keys(rws).length}.`;
   let kind = n ? 'ok' : 'warn';
   try {
-    const fit = await api(`/api/jobs/${S.job.id}/fit`);
+    const fit = await api(`/api/jobs/${job.id}/fit`);
     const pct = Math.round(fit.font_scale * 100);
     if (fit.pages > 1) {
       msg += ` Could not reach one page even at ${pct}% type \u2014 trim some content.`;
@@ -930,12 +1131,11 @@ async function refreshPreview() {
       msg += ' Fitted to one page at full type size.';
     }
   } catch (e) { /* preview still renders; the fit note is advisory */ }
-  setMsg('#exportMsg', msg, kind);
+  if (stillOn(job)) setMsg('#exportMsg', msg, kind);
 }
 
 async function doExport(btn) {
-  busy(btn, true, 'Rendering…');
-  try {
+  await withBusy(btn, 'Rendering…', async () => {
     await api('/api/settings', { method: 'POST', body: JSON.stringify({ first_name: $('#firstName').value }) });
     const r = await api(`/api/jobs/${S.job.id}/export`, { method: 'POST' });
     const a = document.createElement('a');
@@ -945,11 +1145,7 @@ async function doExport(btn) {
     a.click();
     a.remove();
     toast(`Downloaded ${r.filename} (${r.applied}/${r.total} rewrites applied).`, 'ok', 6000);
-  } catch (e) {
-    setMsg('#exportMsg', e.message, 'err');
-  } finally {
-    busy(btn, false);
-  }
+  }, (e) => setMsg('#exportMsg', e.message, 'err'));
 }
 
 // ── step 5: corrections chat ────────────────────────────────
@@ -980,10 +1176,13 @@ function blockSnippet(id) {
 }
 
 async function loadChat() {
-  if (!S.job) return;
+  const job = S.job;
+  if (!job) return;
   try {
-    const r = await api(`/api/jobs/${S.job.id}/chat`);
-    S.job.chat = r.messages;
+    const r = await api(`/api/jobs/${job.id}/chat`);
+    const cur = stillOn(job);
+    if (!cur) return;
+    cur.chat = r.messages;
     renderChat();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -1019,9 +1218,12 @@ function renderChat() {
   el.scrollTop = el.scrollHeight;
 }
 
-function applyChat(r) {
-  S.job.chat = r.messages;
-  S.job.rewrites = r.rewrites;
+/** Show a chat answer, if `job` is still the one on screen. */
+function applyChat(job, r) {
+  const cur = stillOn(job);
+  if (!cur) return;
+  cur.chat = r.messages;
+  cur.rewrites = r.rewrites;
   renderChat();
   refreshPreview();
 }
@@ -1029,30 +1231,33 @@ function applyChat(r) {
 async function sendChat(text) {
   const btn = $('#chatSend');
   const msg = (text ?? $('#chatInput').value).trim();
-  if (!msg || !S.job || btn.disabled) return;
+  const job = S.job;
+  if (!msg || !job || btn.disabled) return;
   // Shown straight away; the server only stores it once it has an answer.
-  S.job.chat = [...(S.job.chat || []), { id: 0, role: 'user', text: msg, pending: true }];
+  job.chat = [...(job.chat || []), { id: 0, role: 'user', text: msg, pending: true }];
   renderChat();
   $('#chatInput').value = '';
-  busy(btn, true, 'Thinking…');
-  try {
-    applyChat(await api(`/api/jobs/${S.job.id}/chat`, {
+  await withBusy(btn, 'Thinking…', async () => {
+    applyChat(job, await api(`/api/jobs/${job.id}/chat`, {
       method: 'POST', body: JSON.stringify({ message: msg }),
     }));
-  } catch (e) {
-    S.job.chat = S.job.chat.filter((m) => !m.pending);
-    renderChat();
-    $('#chatInput').value = msg;
+  }, (e) => {
+    const cur = stillOn(job);
+    if (cur) {
+      cur.chat = (cur.chat || []).filter((m) => !m.pending);
+      renderChat();
+      $('#chatInput').value = msg;
+    }
     toast(e.message, 'err', 7000);
-  } finally {
-    busy(btn, false);
-  }
+  });
 }
 
 async function undoChat(id, btn) {
-  busy(btn, true, 'Undoing…');
+  const job = S.job;
+  // On success the chat is re-rendered and this button goes with it.
+  if (!busy(btn, true, 'Undoing…')) return;
   try {
-    applyChat(await api(`/api/jobs/${S.job.id}/chat/${id}/undo`, { method: 'POST' }));
+    applyChat(job, await api(`/api/jobs/${job.id}/chat/${id}/undo`, { method: 'POST' }));
   } catch (e) {
     toast(e.message, 'err');
     busy(btn, false);
@@ -1072,7 +1277,7 @@ function renderOutreach() {
   $('#emSubject').value = (o && o.email_subject) || '';
   $('#emBody').value = (o && o.email_body) || '';
   outreachLabel();
-  const used = (o && o.meta && o.meta.highlights_used) || [];
+  const used = (o && o.meta.highlights_used) || [];
   const src = $('#outreachSrc');
   src.classList.toggle('hidden', !used.length);
   if (used.length) {
@@ -1097,15 +1302,18 @@ function syncOutreach() {
 }
 
 async function makeOutreach(btn) {
-  if (!S.job) return;
-  busy(btn, true, 'Writing…');
-  setMsg('#outreachMsg', '');
-  try {
-    const r = await api(`/api/jobs/${S.job.id}/outreach`, {
+  const job = S.job;
+  if (!job) return;
+  await withBusy(btn, 'Writing…', async () => {
+    setMsg('#outreachMsg', '');
+    const r = await api(`/api/jobs/${job.id}/outreach`, {
       method: 'POST',
       body: JSON.stringify({ recruiter: $('#recruiter').value, extra: $('#outreachNote').value }),
     });
-    S.job.outreach = r.outreach;
+    toast('Outreach drafted.', 'ok');
+    const cur = stillOn(job);
+    if (!cur) return;
+    cur.outreach = r.outreach;
     renderOutreach();
     const over = r.outreach.linkedin.length - LI_LIMIT;
     if (over > 0) {
@@ -1113,13 +1321,8 @@ async function makeOutreach(btn) {
     } else {
       setMsg('#outreachMsg', 'Drafted. Check every claim before you send it.', 'ok');
     }
-    toast('Outreach drafted.', 'ok');
-  } catch (e) {
-    setMsg('#outreachMsg', e.message, 'err');
-  } finally {
-    busy(btn, false);   // restores the label busy() captured, so re-apply ours
-    outreachLabel();
-  }
+  }, (e) => { if (stillOn(job)) setMsg('#outreachMsg', e.message, 'err'); else toast(e.message, 'err'); });
+  outreachLabel();   // busy() put back the label it captured, which may be stale
 }
 
 async function saveOutreach() {
@@ -1204,8 +1407,7 @@ async function addExample(kind, subject, body, btn) {
     toast('That message is already saved as an example.', 'err');
     return false;
   }
-  busy(btn, true, 'Saving…');
-  try {
+  const saved = await withBusy(btn, 'Saving…', async () => {
     const e = await api('/api/outreach-examples', {
       method: 'POST', body: JSON.stringify({ kind, subject, body }),
     });
@@ -1213,12 +1415,8 @@ async function addExample(kind, subject, body, btn) {
     renderExamples();
     toast('Example saved. The next draft will follow its voice.', 'ok');
     return true;
-  } catch (err) {
-    toast(err.message, 'err');
-    return false;
-  } finally {
-    busy(btn, false);
-  }
+  }, (err) => { toast(err.message, 'err'); return false; });
+  return !!saved;
 }
 
 async function deleteExample(id) {
@@ -1243,8 +1441,13 @@ async function copyText(text, what) {
 
 // ── wiring ──────────────────────────────────────────────────
 $$('.step').forEach((b) => b.addEventListener('click', () => setStep(+b.dataset.step)));
-$('#drop').addEventListener('click', () => $('#file').click());
-$('#file').addEventListener('change', (e) => e.target.files[0] && upload(e.target.files[0]));
+$('#drop').addEventListener('click', (e) => { if (e.target !== $('#file')) $('#file').click(); });
+$('#file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  // Cleared, so picking the same file again (after deleting it, say) still fires.
+  e.target.value = '';
+  if (file) upload(file);
+});
 ['dragover', 'dragleave', 'drop'].forEach((ev) =>
   $('#drop').addEventListener(ev, (e) => {
     e.preventDefault();
@@ -1256,6 +1459,11 @@ $('#openSettings').addEventListener('click', openSettings);
 $('#closeSettings').addEventListener('click', dismissSettings);
 $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') dismissSettings(); });
 $('#backendModel').addEventListener('input', () => { S.discardSettings = false; });
+$('#backendKey').addEventListener('change', (e) => {
+  if (e.target.value.trim()) S.keySave = saveKey(e.target.value);
+});
+$('#removeKey').addEventListener('click', () => { S.keySave = saveKey(''); });
+$('#quitApp').addEventListener('click', quitApp);
 $('#reloadStep').addEventListener('click', (e) => reloadStep(e.currentTarget));
 $('#viewPrompt').addEventListener('click', openPrompt);
 $('#closePrompt').addEventListener('click', closePrompt);
@@ -1281,28 +1489,25 @@ $('#firstName').addEventListener('change', async (e) => {
 $('#saveBackend').addEventListener('click', (e) => saveBackend(e.currentTarget));
 $('#testBackend').addEventListener('click', (e) => testBackend(e.currentTarget));
 $$('#themeSeg button').forEach((b) => b.addEventListener('click', () => {
-  localStorage.setItem(THEME_KEY, b.dataset.theme);
+  localSet(THEME_KEY, b.dataset.theme);
   applyTheme(b.dataset.theme);
 }));
 // "System" follows the OS live, not just at load.
 darkQuery.addEventListener('change', () => applyTheme(themeChoice()));
-$('#parseJd').addEventListener('click', (e) => parseJd(e.target));
+$('#parseJd').addEventListener('click', (e) => parseJd(e.currentTarget));
 $('#mode').addEventListener('change', (e) => {
   $('#modeHint').textContent = MODE_HINTS[e.target.value];
   if (S.job) saveJobField('mode', e.target.value);
 });
 $('#company').addEventListener('change', (e) => saveJobField('company', e.target.value));
 $('#role').addEventListener('change', (e) => saveJobField('role', e.target.value));
-$('#runTransform').addEventListener('click', (e) => runTransform(e.target, null, ''));
-$('#acceptAll').addEventListener('click', async () => {
-  S.job.rewrites = await api(`/api/jobs/${S.job.id}/accept-all`, { method: 'POST' });
-  renderReview();
-});
+$('#runTransform').addEventListener('click', (e) => runTransform(e.currentTarget, null, ''));
+$('#acceptAll').addEventListener('click', acceptAll);
 $('#replaceBox').addEventListener('change', (e) => setReplace(e.target.checked));
 $('#toggleSkipped').addEventListener('click', () => { S.showSkipped = !S.showSkipped; renderMap(); });
 $('#toExport').addEventListener('click', () => setStep(5));
 $('#refreshPreview').addEventListener('click', refreshPreview);
-$('#download').addEventListener('click', (e) => doExport(e.target));
+$('#download').addEventListener('click', (e) => doExport(e.currentTarget));
 $('#toOutreach').addEventListener('click', () => setStep(6));
 $('#chatSend').addEventListener('click', () => sendChat());
 $('#chatInput').addEventListener('keydown', (e) => {
@@ -1311,7 +1516,7 @@ $('#chatInput').addEventListener('keydown', (e) => {
     sendChat();
   }
 });
-$('#makeOutreach').addEventListener('click', (e) => makeOutreach(e.target));
+$('#makeOutreach').addEventListener('click', (e) => makeOutreach(e.currentTarget));
 $('#liText').addEventListener('input', syncOutreach);
 ['#emSubject', '#emBody'].forEach((s) => $(s).addEventListener('input', syncOutreach));
 ['#recruiter', '#liSubject', '#liText', '#emSubject', '#emBody'].forEach((s) =>
@@ -1329,15 +1534,16 @@ $('#copyEmail').addEventListener('click', () =>
 (async function init() {
   $('#modeHint').textContent = MODE_HINTS.aggressive;
   buildExampleSlots();
-  await loadStatus();
-  await loadResumes();
-  await loadExperiences();
-  await loadExamples();
-  const step = await restoreSession().catch(() => 1);
-  await loadResumes();   // again, now that a restored resume can be marked selected
-  renderResumePreview();
-  setStep(step);
-  if (!S.status.ready) {
-    toast(S.status.detail || 'No model backend available.', 'err', 9000);
+  try {
+    await Promise.all([loadStatus(), loadResumes(), loadExperiences(), loadExamples()]);
+    const step = await restoreSession().catch(() => 1);
+    renderResumeList();   // again, now that a restored resume can be marked selected
+    renderResumePreview();
+    setStep(step);
+    if (!S.status.ready) {
+      toast(S.status.detail || 'No model backend available.', 'err', 9000);
+    }
+  } catch (e) {
+    toast(`Could not load Resumap: ${e.message}. Is the server running?`, 'err', 9000);
   }
 })();

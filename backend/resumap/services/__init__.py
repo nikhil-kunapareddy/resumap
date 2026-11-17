@@ -16,6 +16,7 @@ from ..storage import Store
 from .corrections import CorrectionService
 from .exports import ExportService
 from .jobs import JobService
+from .lifecycle import LifecycleService
 from .outreach import OutreachService
 from .resumes import ExperienceService, ResumeService
 from .rewrites import RewriteService
@@ -27,6 +28,7 @@ class Services:
     store: Store
     gateway: ModelGateway
     paths: Paths
+    lifecycle: LifecycleService
     settings: SettingsService
     resumes: ResumeService
     experiences: ExperienceService
@@ -35,6 +37,14 @@ class Services:
     exports: ExportService
     corrections: CorrectionService
     outreach: OutreachService
+
+    def start(self) -> None:
+        """Create the folders, bring the database schema up to date and apply the
+        saved settings. Safe to repeat: the launcher runs it before the server
+        starts, to report the backend, and the app's lifespan runs it again."""
+        self.paths.ensure()
+        self.store.init()
+        self.settings.apply_saved()
 
     @classmethod
     def build(
@@ -46,18 +56,24 @@ class Services:
         default_backend: str,
         default_first_name: str,
     ) -> Services:
+        lifecycle = LifecycleService()
         settings = SettingsService(
-            store, gateway, default_backend=default_backend, default_first_name=default_first_name
+            store,
+            gateway,
+            lifecycle,
+            default_backend=default_backend,
+            default_first_name=default_first_name,
         )
         exports = ExportService(store, paths, settings)
         return cls(
             store=store,
             gateway=gateway,
             paths=paths,
+            lifecycle=lifecycle,
             settings=settings,
             resumes=ResumeService(store, paths),
             experiences=ExperienceService(store),
-            jobs=JobService(store, gateway),
+            jobs=JobService(store, gateway, paths),
             rewrites=RewriteService(store, gateway),
             exports=exports,
             corrections=CorrectionService(store, gateway, exports),
@@ -71,6 +87,7 @@ __all__ = [
     "ExperienceService",
     "ExportService",
     "JobService",
+    "LifecycleService",
     "OutreachService",
     "ResumeService",
     "RewriteService",

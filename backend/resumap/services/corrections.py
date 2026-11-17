@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from .. import obs
@@ -9,8 +10,8 @@ from ..domain import ChatMessage, ChatRole, Layout, Rewrite, RewriteStatus
 from ..llm import BackendUnavailable, ModelGateway
 from ..rendering.pdfgen import clean_layout
 from ..storage import Store
-from .base import Service, stored_meta
-from .documents import left_text, render_doc
+from .base import ModelService, stored_meta
+from .documents import left_text
 from .errors import Conflict, Invalid, NotFound, Unavailable, UpstreamFailed
 from .exports import ExportService
 from .results import ChatMessageOut, ChatMetaOut, ChatState
@@ -58,10 +59,9 @@ def _applied(m: ChatMessage) -> bool:
     )
 
 
-class CorrectionService(Service):
+class CorrectionService(ModelService):
     def __init__(self, store: Store, gateway: ModelGateway, exports: ExportService) -> None:
-        super().__init__(store)
-        self.gateway = gateway
+        super().__init__(store, gateway)
         self.exports = exports
 
     def state(self, job_id: int) -> ChatState:
@@ -94,24 +94,20 @@ class CorrectionService(Service):
         the review step with their substitutions, like a hand edit. The state each
         one replaced is kept on the reply, which is what Undo restores.
         """
-        job = self._job(job_id)
-        resume = self._resume(job.resume_id)
-        why = self.gateway.status()
-        if why:
-            raise Unavailable(why)
+        job, _resume = self._job_and_resume(job_id)
+        await self._require_backend()
         message = message.strip()
         if not message:
             raise Invalid("Type what you want changed first.")
 
-        _out, _name, fit = self.exports.build(job_id, preview=True)
-        rewrites = self.store.rewrites.for_job(job_id)
-        doc = render_doc(resume.doc.as_dict(), rewrites)
-        layout = fit["layout"]
+        # A full layout pass, so off the event loop.
+        page = await asyncio.to_thread(self.exports.measure, job)
+        doc, fit = page.doc, page.fit
         history = self.store.chat.for_job(job_id)
         try:
             rev = await self.gateway.revise_pdf(
-                blocks=chat_blocks(doc, rewrites, fit["blocks"]),
-                layout=layout,
+                blocks=chat_blocks(doc, page.rewrites, fit["blocks"]),
+                layout=fit["layout"],
                 fit=fit,
                 geometry=doc.get("geometry") or {},
                 role=job.role,
@@ -123,14 +119,17 @@ class CorrectionService(Service):
         except BackendUnavailable as exc:
             raise Unavailable(str(exc)) from exc
         except Exception as exc:  # noqa: BLE001 - say why, keep the page as it was
-            obs.record_failure("pdf_chat", exc, 0.0, job_id=job_id)
             raise UpstreamFailed(f"Could not apply that: {type(exc).__name__}: {exc}") from exc
 
         blocks = {b["id"]: b for b in doc.get("blocks", [])}
         before: dict[str, dict[str, Any] | None] = {}
-        new_layout = clean_layout({**layout, **rev["layout"]})
-        changed = {k: v for k, v in new_layout.items() if v != layout.get(k)}
         with self.store.transaction():
+            # Read again inside the write: an Undo committed while the model was
+            # answering is what this turn builds on and records as replaced.
+            rewrites = self.store.rewrites.for_job(job_id)
+            layout = clean_layout(self.store.layouts.get(job_id))
+            new_layout = clean_layout({**layout, **rev["layout"]})
+            changed = {k: v for k, v in new_layout.items() if v != layout.get(k)}
             for e in rev["edits"]:
                 bid = e["block_id"]
                 old = rewrites.get(bid)

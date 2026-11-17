@@ -9,9 +9,6 @@ from __future__ import annotations
 
 import os
 import sys
-import threading
-import time
-import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -36,7 +33,7 @@ def main() -> None:
     _reexec_into_venv()
 
     try:
-        import uvicorn
+        import uvicorn  # noqa: F401 - only checked for; the launcher runs it
     except ModuleNotFoundError:
         sys.exit(
             "Dependencies are not installed.\n"
@@ -45,30 +42,9 @@ def main() -> None:
         )
 
     sys.path.insert(0, str(BACKEND_DIR))
-    from resumap.config import HOST, PORT
-    from resumap.main import app
+    from resumap.launcher import serve
 
-    services = app.state.services
-    services.paths.ensure()
-    services.store.init()
-    services.settings.apply_saved()
-
-    url = f"http://{HOST}:{PORT}"
-    print(f"\n  Resumap  ->  {url}")
-    why = services.gateway.status()
-    if why:
-        print(f"  WARNING: the {services.gateway.registry.current_name()} backend is not ready.")
-        print(f"           {why}")
-    else:
-        print(f"  Backend: {services.gateway.registry.current_name()}")
-    print("  Ctrl-C to stop.\n")
-
-    if "--no-browser" not in sys.argv:
-        threading.Thread(
-            target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True
-        ).start()
-
-    uvicorn.run("resumap.main:app", host=HOST, port=PORT, log_level="warning")
+    serve(open_browser="--no-browser" not in sys.argv)
 
 
 if __name__ == "__main__":

@@ -591,3 +591,30 @@ def test_usage_is_recorded_per_operation(client, job):
     transform(client, job)
     by_op = client.get("/api/debug/usage").json()["by_op"]
     assert {"jd_parse", "rewrite"} <= set(by_op)
+
+
+def test_the_fit_is_measured_without_writing_the_preview(client, job, paths):
+    # The browser may be streaming the preview while it asks for the fit.
+    r = client.get(f"/api/jobs/{job['id']}/fit")
+    assert r.status_code == 200 and r.json()["pages"] == 1
+    assert not paths.preview(job["id"]).exists()
+
+
+def test_a_chat_turn_builds_on_an_undo_made_while_it_waited(client, fake, job, store):
+    jid = job["id"]
+    store.layouts.set(jid, {"font": 0.9})
+
+    def answer(system, user):
+        store.layouts.set(jid, {})  # an Undo lands while the model is answering
+        return {
+            "reply": "Narrower margins.",
+            "edits": [],
+            "layout": [{"setting": "side_margins", "value": 40}],
+            "justify": "unchanged",
+        }
+
+    fake.respond("PdfRevision", answer)
+    r = client.post(f"/api/jobs/{jid}/chat", json={"message": "Narrow the side margins"})
+    assert r.status_code == 200, r.text
+    assert r.json()["layout"]["font"] == 1.0  # the undone 0.9 stays undone
+    assert r.json()["layout"]["margin_x"] == 40

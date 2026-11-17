@@ -109,5 +109,10 @@ class ModelBody(BaseModel):
     model: str = ""
 
 
+class KeyBody(BaseModel):
+    # Blank removes the saved key, falling back to the environment's.
+    key: str = ""
+
+
 class PromptBody(BaseModel):
     text: str

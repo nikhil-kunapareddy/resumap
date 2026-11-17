@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from .. import obs
@@ -10,6 +11,7 @@ from ..llm.backends import suggest_model
 from ..storage import Store
 from .base import Service
 from .errors import Invalid, NotFound
+from .lifecycle import LifecycleService
 from .results import (
     BackendInfo,
     BackendsOut,
@@ -21,19 +23,27 @@ from .results import (
 )
 
 PROMPT_MAX_CHARS = 20000
+KEY_MAX_CHARS = 400
 
 
 class SettingsService(Service):
     def __init__(
-        self, store: Store, gateway: ModelGateway, *, default_backend: str, default_first_name: str
+        self,
+        store: Store,
+        gateway: ModelGateway,
+        lifecycle: LifecycleService,
+        *,
+        default_backend: str,
+        default_first_name: str,
     ) -> None:
         super().__init__(store)
         self.gateway = gateway
+        self.lifecycle = lifecycle
         self.default_backend = default_backend
         self.default_first_name = default_first_name
 
     def apply_saved(self) -> None:
-        """Put the saved backend, models and prompt edits live (at startup)."""
+        """Put the saved backend, models, API keys and prompt edits live (at startup)."""
         registry = self.gateway.registry
         name = self.store.settings.get("backend", self.default_backend)
         if name not in registry:
@@ -41,6 +51,10 @@ class SettingsService(Service):
         registry.select(
             name, {b: self.store.settings.get(f"model.{b}", "") for b in registry.names}
         )
+        for b in registry.names:
+            backend = registry.get(b)
+            if backend.accepts_key:
+                backend.set_key(self.store.settings.get(f"key.{b}") or None)
         self._apply_prompts()
 
     def _apply_prompts(self) -> None:
@@ -65,6 +79,7 @@ class SettingsService(Service):
             detail=why,
             model=registry.model_label(),
             first_name=self.first_name(),
+            can_quit=self.lifecycle.can_quit,
         )
 
     def backends(self) -> BackendsOut:
@@ -74,6 +89,30 @@ class SettingsService(Service):
             selected=registry.current_name(),
             backends=[BackendInfo(**b) for b in registry.describe()],
         )
+
+    def save_key(self, name: str, key: str) -> BackendsOut:
+        """Save (or, when blank, remove) the API key for backend `name`.
+
+        It is stored in the local database, like `.env` a plain local file, and
+        is never sent back: the panel only learns where a key comes from. Press
+        Test to check it can answer; saving does not make a call.
+        """
+        registry = self.gateway.registry
+        if name not in registry:
+            raise NotFound(f"Unknown backend '{name}'.")
+        backend = registry.get(name)
+        if not backend.accepts_key:
+            raise Invalid(f"{backend.label} signs in on its own and takes no API key.")
+        key = key.strip()
+        if len(key) > KEY_MAX_CHARS or any(c.isspace() for c in key):
+            raise Invalid("That does not look like an API key. Paste it as one word, no spaces.")
+        if key:
+            self.store.settings.set(f"key.{name}", key)
+        else:
+            self.store.settings.delete(f"key.{name}")
+        backend.set_key(key or None)
+        obs.event("settings.key", backend=name, saved=bool(key), source=backend.key_source())
+        return self.backends()
 
     async def test_backend(self, name: str, model: str) -> BackendTestOut:
         """Make one tiny real call through a backend, without switching to it.
@@ -112,7 +151,7 @@ class SettingsService(Service):
             self.store.settings.set("backend", name)
             self.store.settings.set(f"model.{name}", model)
         self.gateway.registry.select(name, {name: model})
-        out = self.status()
+        out = await asyncio.to_thread(self.status)
         obs.event(
             "settings.backend",
             backend=name,

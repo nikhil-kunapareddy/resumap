@@ -3,25 +3,52 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
 
-# The package lives at <project>/backend/resumap, so the project root -- which
-# holds .env, data/ and the frontend -- is two levels up.
+
+def user_data_dir(platform: str = sys.platform, home: Path | None = None) -> Path:
+    """Where the packaged app keeps its database, uploads, logs and optional .env."""
+    home = home or Path.home()
+    if platform == "darwin":
+        return home / "Library" / "Application Support" / "Resumap"
+    if platform == "win32":
+        return Path(os.getenv("APPDATA") or (home / "AppData" / "Roaming")) / "Resumap"
+    return Path(os.getenv("XDG_DATA_HOME") or (home / ".local" / "share")) / "resumap"
+
+
+# True inside the PyInstaller app (packaging/), where there is no checkout: the
+# UI ships inside the bundle and everything written goes to the user's folder.
+FROZEN = bool(getattr(sys, "frozen", False))
+
+# From a checkout the package lives at <project>/backend/resumap, so the
+# project root -- which holds .env, data/ and the frontend -- is two levels up.
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = BACKEND_DIR.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
+if FROZEN:
+    FRONTEND_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR)) / "frontend"
+    HOME_DIR = user_data_dir()
+else:
+    FRONTEND_DIR = BASE_DIR / "frontend"
+    HOME_DIR = BASE_DIR
 
-load_dotenv(BASE_DIR / ".env")
+ENV_FILE = HOME_DIR / ".env"
+load_dotenv(ENV_FILE)
 # What .env itself set, so a CLI backend can be kept from inheriting a key
 # that was put there for the api backend (see backends.cli_env).
-DOTENV_KEYS = {k: v for k, v in dotenv_values(BASE_DIR / ".env").items() if v}
+DOTENV_KEYS = {k: v for k, v in dotenv_values(ENV_FILE).items() if v}
 
 # Point a second instance at its own storage (testing, or a throwaway profile)
 # so it cannot touch the resumes and exports your main instance holds.
-DATA_DIR = Path(os.getenv("RESUMAP_DATA_DIR") or (BASE_DIR / "data")).expanduser()
+DATA_DIR = Path(
+    os.getenv("RESUMAP_DATA_DIR") or (HOME_DIR if FROZEN else BASE_DIR / "data")
+).expanduser()
+# The working directory CLI backends run in: the checkout, or the app's own
+# folder (never the inside of the app bundle).
+WORK_DIR = DATA_DIR if FROZEN else BASE_DIR
 UPLOAD_DIR = DATA_DIR / "uploads"
 EXPORT_DIR = DATA_DIR / "exports"
 DB_PATH = DATA_DIR / "resumap.db"
@@ -35,7 +62,7 @@ MODEL = os.getenv("RESUMAP_MODEL", "claude-opus-5")
 # Who serves the model calls when nothing has been chosen in the settings
 # panel yet: "api" (ANTHROPIC_API_KEY, billed per token), "claude_code",
 # "codex" or "pi" (local CLIs, each on its own sign-in). The panel's choice,
-# once saved, wins over this. See app/backends/ for what each one does.
+# once saved, wins over this. See resumap/llm/backends/ for what each one does.
 BACKEND = os.getenv("RESUMAP_BACKEND", "api").strip().lower() or "api"
 
 # Paths to the CLI backends' binaries, only needed when they are not on the
@@ -48,7 +75,9 @@ PI_CLI = os.getenv("RESUMAP_PI_CLI", "").strip() or None
 DEFAULT_FIRST_NAME = os.getenv("RESUMAP_FIRST_NAME", "resume")
 
 HOST = os.getenv("RESUMAP_HOST", "127.0.0.1")
-PORT = int(os.getenv("RESUMAP_PORT", "8000"))
+# The app defaults to a port of its own, so it and a checkout's run.py can run
+# side by side without one opening the other's data.
+PORT = int(os.getenv("RESUMAP_PORT") or (8765 if FROZEN else 8000))
 
 
 def api_key() -> str | None:
@@ -73,3 +102,11 @@ class Paths:
     def ensure(self) -> None:
         for d in (self.db.parent, self.uploads, self.exports, self.logs):
             d.mkdir(parents=True, exist_ok=True)
+
+    def preview(self, job_id: int) -> Path:
+        """A job's preview PDF, rendered afresh whenever the Export step shows it."""
+        return self.exports / f"_preview_{job_id}.pdf"
+
+    def parse_report(self, resume_id: int) -> Path:
+        """The block-classification table written when a resume is uploaded."""
+        return self.logs / "parse" / f"{resume_id}.txt"

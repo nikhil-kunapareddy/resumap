@@ -4,31 +4,22 @@ from __future__ import annotations
 
 from .. import obs
 from ..domain import Job, Rewrite, RewriteStatus
-from ..llm import ModelGateway
-from ..rendering.pdfgen import line_budget, new_bullet_budget
-from ..storage import Store
-from .base import Service, stored_meta
+from ..rendering.pdfgen import budgets
+from .base import ModelService, stored_meta
 from .documents import entry_context, placements
-from .errors import Invalid, Unavailable
+from .errors import Invalid
 from .results import PreviewKind, PromptPreview, TransformOut, TransformResult
 
 
-class RewriteService(Service):
-    def __init__(self, store: Store, gateway: ModelGateway) -> None:
-        super().__init__(store)
-        self.gateway = gateway
-
+class RewriteService(ModelService):
     async def transform(self, job_id: int, block_ids: list[str] | None, extra: str) -> TransformOut:
         """Rewrite every mapped box, or only `block_ids` for a re-roll.
 
         A box that fails is reported in `results` and keeps whatever rewrite it
         had; the rest are saved together.
         """
-        job = self._job(job_id)
-        resume = self._resume(job.resume_id)
-        why = self.gateway.status()
-        if why:
-            raise Unavailable(why)
+        job, resume = self._job_and_resume(job_id)
+        await self._require_backend()
 
         doc = resume.doc.as_dict()
         blocks = {b["id"]: b for b in doc["blocks"]}
@@ -86,8 +77,7 @@ class RewriteService(Service):
 
     def preview(self, job_id: int, block_id: str) -> PromptPreview:
         """The exact system prompt and message Transform would send for one box."""
-        job = self._job(job_id)
-        resume = self._resume(job.resume_id)
+        job, resume = self._job_and_resume(job_id)
         calls = self._calls(job, resume.doc.as_dict(), [block_id], "")
         if not calls:
             raise Invalid("That box is not mapped to any JD point yet.")
@@ -105,10 +95,12 @@ class RewriteService(Service):
         mappings = self.store.mappings.for_job(job.id)
         blocks = {b["id"]: b for b in doc["blocks"]}
         by_point = {p.id: p.model_dump(mode="json") for p in job.points}
-        layout = self.store.layouts.get(job.id)
-        budget = line_budget(doc, layout)
+        # Measured once for the whole batch: each is a full layout pass.
+        budget = budgets(doc, self.store.layouts.get(job.id))
         exps = {e.key: e.model_dump(mode="json") for e in self.store.experiences.all()}
         box_modes = self.store.mappings.box_modes(job.id)
+        spots = placements(doc)
+        examples = [b["text"] for b in doc["blocks"] if b["mappable"]][:3]
         out = []
         for bid in block_ids or list(mappings.keys()):
             pts = [by_point[p] for p in mappings.get(bid, []) if p in by_point]
@@ -124,11 +116,11 @@ class RewriteService(Service):
                             "jd_points": pts,
                             "role": job.role,
                             "company": job.company,
-                            "placements": placements(doc),
-                            "examples": [b["text"] for b in doc["blocks"] if b["mappable"]][:3],
+                            "placements": spots,
+                            "examples": examples,
                             "mode": job.mode,
                             "extra": extra,
-                            "max_chars": new_bullet_budget(doc, layout),
+                            "max_chars": budget.new_bullet,
                         },
                     }
                 )
@@ -148,7 +140,7 @@ class RewriteService(Service):
                             "role": job.role,
                             "company": job.company,
                             "extra": extra,
-                            "max_chars": budget.get(bid, 0),
+                            "max_chars": budget.lines.get(bid, 0),
                         },
                     }
                 )
@@ -165,7 +157,7 @@ class RewriteService(Service):
                             "company": job.company,
                             "mode": job.mode,
                             "extra": extra,
-                            "max_chars": budget.get(bid, 0),
+                            "max_chars": budget.lines.get(bid, 0),
                         },
                     }
                 )
@@ -238,10 +230,6 @@ class RewriteService(Service):
         return self._rewrite(job_id, block_id)
 
     def accept_all(self, job_id: int) -> dict[str, Rewrite]:
-        rws = self.store.rewrites.for_job(job_id)
-        pending = [bid for bid, rw in rws.items() if rw.status == RewriteStatus.PENDING]
-        with self.store.transaction():
-            for bid in pending:
-                self.store.rewrites.set_status(job_id, bid, RewriteStatus.ACCEPTED)
-        obs.event("review.accept_all", job_id=job_id, accepted=len(pending))
+        accepted = self.store.rewrites.accept_pending(job_id)
+        obs.event("review.accept_all", job_id=job_id, accepted=accepted)
         return self.store.rewrites.for_job(job_id)

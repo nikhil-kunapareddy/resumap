@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
 from .. import obs
-
-
-def _text_allowed() -> bool:
-    return os.getenv("RESUMAP_LOG_TEXT", "0").strip() not in ("", "0", "false", "no")
 
 
 def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
@@ -27,6 +22,7 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
         return sum(1 for r in (b.get("runs") or []) + (b.get("right_runs") or []) if r.get("uri"))
 
     blocks = doc.get("blocks") or []
+    with_text = obs.log_text_enabled()
     out: list[str] = [
         f"PARSE REPORT  resume={resume_id}  label={label}",
         "=" * 78,
@@ -60,7 +56,7 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
             f"{(b.get('section') or '-')[:23]:<24}"
             f"{len(b.get('text') or ''):>5}  {flags}   {reason}"
         )
-        if _text_allowed():
+        if with_text:
             out.append(f"       {obs.scrub(b.get('text') or '')[:70]}")
 
     out += ["", "counts by reason:"]
@@ -69,14 +65,12 @@ def parse_report(resume_id: int, label: str, doc: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
-def write_parse_report(
-    log_dir: Path, resume_id: int, label: str, doc: dict[str, Any]
-) -> Path | None:
+def write_parse_report(path: Path, resume_id: int, label: str, doc: dict[str, Any]) -> Path | None:
+    """Write the report to `path`; None if it could not be written."""
     try:
-        directory = log_dir / "parse"
-        directory.mkdir(parents=True, exist_ok=True)
-        path = directory / f"{resume_id}.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(parse_report(resume_id, label, doc), encoding="utf-8")
         return path
-    except Exception:  # noqa: BLE001 - reporting must not break an upload
+    except Exception as exc:  # noqa: BLE001 - reporting must not break an upload
+        obs.warn("parse.report_failed", resume_id=resume_id, error=type(exc).__name__)
         return None

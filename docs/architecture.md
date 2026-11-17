@@ -31,7 +31,7 @@ server binds to loopback. The model is optional for the first three steps
 ```mermaid
 flowchart TB
     main["main.py<br/>composition root"]
-    api["api/<br/>routers, request bodies, error mapping"]
+    api["api/<br/>routers, request bodies, error mapping, local-only guard"]
     services["services/<br/>use cases, response models"]
     llm["llm/<br/>gateway, prompts, backends"]
     storage["storage/<br/>Database, repositories"]

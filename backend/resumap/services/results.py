@@ -44,6 +44,9 @@ class StatusOut(Envelope):
     detail: str | None = Field(description="Why the backend cannot run; null when it can.")
     model: str
     first_name: str
+    can_quit: bool = Field(
+        default=False, description="Whether POST /api/quit can stop this server."
+    )
 
 
 class BackendInfo(Envelope):
@@ -54,6 +57,11 @@ class BackendInfo(Envelope):
     default_model: str
     model: str
     selected: bool
+    accepts_key: bool = Field(description="Whether an API key can be saved for this backend.")
+    key_source: Literal["settings", "environment"] | None = Field(
+        description="Where its key comes from; null when there is none. The key itself is "
+        "never returned."
+    )
 
 
 class BackendsOut(Envelope):
@@ -98,8 +106,7 @@ class ResumeOut(Envelope):
     blocks: list[Block]
 
 
-class ExperienceDeleted(Envelope):
-    ok: bool = True
+class ExperienceDeleted(Ok):
     mappings: int
     rewrites: int
 
@@ -132,21 +139,18 @@ class JobDetail(Envelope):
     resume: ResumeOut | None
 
 
-class PointsKept(Envelope):
-    ok: bool = True
+class PointsKept(Ok):
     points: list[JDPoint]
     dropped: list[str]
     unwired: int
 
 
-class MappingSaved(Envelope):
-    ok: bool = True
+class MappingSaved(Ok):
     block_id: str
     point_ids: list[str]
 
 
-class BoxModeSaved(Envelope):
-    ok: bool = True
+class BoxModeSaved(Ok):
     block_id: str
     mode: BoxMode
 
@@ -184,7 +188,7 @@ class PromptPreview(Envelope):
 
 
 class SelfCheck(Envelope):
-    """report.verify_pdf's findings. ``ok`` is null when the check itself failed."""
+    """rendering/selfcheck.verify_pdf's findings. ``ok`` is null when the check itself failed."""
 
     ok: bool | None
     pages: int | None = None

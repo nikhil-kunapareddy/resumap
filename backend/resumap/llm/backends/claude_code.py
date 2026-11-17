@@ -29,14 +29,15 @@ Five options keep this a single structured request instead of a coding agent:
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
-import shutil
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Effort, Usage
+from .base import CALL_TIMEOUT_S, CliBackend, Completion, Effort, Usage
 
 # One turn to answer plus one to emit the structured output, and a little room
 # for the SDK to re-prompt itself after a schema mismatch.
@@ -47,9 +48,10 @@ MAX_TURNS = 4
 _SUPPRESS_ENV = {"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": ""}
 
 
-class ClaudeCodeBackend(Backend):
+class ClaudeCodeBackend(CliBackend):
     name = "claude_code"
     label = "Claude Code"
+    binary = "claude"
     # Every call spawns a `claude` subprocess, so the ceiling here is local
     # memory rather than an HTTP rate limit. Deliberately lower than the API
     # backend's.
@@ -58,14 +60,8 @@ class ClaudeCodeBackend(Backend):
     def __init__(self, default_model: str, cli_path: str | None, cwd: Path) -> None:
         """`default_model` is Resumap's own choice (RESUMAP_MODEL), overridable in
         the settings panel; `cli_path` is RESUMAP_CLAUDE_CLI, if set."""
-        super().__init__(default_model)
-        self._cli = cli_path
+        super().__init__(default_model, cli_path)
         self._cwd = cwd
-
-    def _cli_path(self) -> str | None:
-        if self._cli:
-            return self._cli if Path(self._cli).exists() else None
-        return shutil.which("claude")
 
     def unavailable(self) -> str | None:
         if importlib.util.find_spec("claude_agent_sdk") is None:
@@ -93,7 +89,7 @@ class ClaudeCodeBackend(Backend):
         max_tokens: int,
         effort: Effort,
     ) -> Completion:
-        from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+        from claude_agent_sdk import ClaudeAgentOptions
 
         # max_tokens has no Agent SDK equivalent -- the CLI applies the model's own
         # output cap, which is well above anything one bullet needs.
@@ -111,10 +107,10 @@ class ClaudeCodeBackend(Backend):
             env=dict(_SUPPRESS_ENV),
         )
 
-        result = None
-        async for message in query(prompt=user, options=options):
-            if isinstance(message, ResultMessage):
-                result = message
+        try:
+            result = await asyncio.wait_for(_result(user, options), CALL_TIMEOUT_S)
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(f"Claude Code gave no answer within {CALL_TIMEOUT_S:.0f}s") from exc
         if result is None:
             raise RuntimeError("Claude Code exited without returning a result.")
 
@@ -154,3 +150,24 @@ class ClaudeCodeBackend(Backend):
                 "errors": result.errors or None,
             },
         )
+
+
+async def _result(user: str, options: Any) -> Any:
+    """The run's ResultMessage, or None if the CLI ended without one.
+
+    The stream is closed however the loop ends, so a timeout or cancellation
+    shuts the `claude` subprocess down rather than leaving it running.
+    """
+    from claude_agent_sdk import ResultMessage, query
+
+    result = None
+    messages = query(prompt=user, options=options)
+    try:
+        async for message in messages:
+            if isinstance(message, ResultMessage):
+                result = message
+    finally:
+        aclose = getattr(messages, "aclose", None)
+        if aclose is not None:
+            await aclose()
+    return result

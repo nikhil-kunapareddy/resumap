@@ -78,6 +78,8 @@ class BackendRegistry:
                     "default_model": b.default_model,
                     "model": (self._models.get(name) or "").strip(),
                     "selected": name == self._selected,
+                    "accepts_key": b.accepts_key,
+                    "key_source": b.key_source(),
                 }
             )
         return out

@@ -10,25 +10,54 @@ Everything runs on your machine. Your resume never leaves it except as the text
 of individual bullets sent to Claude during a rewrite, and the tailored bullets
 sent again when you ask for the outreach messages.
 
-## Setup
+## Install the app (macOS)
+
+No Python and no setup: everything Resumap needs is inside the app.
+
+1. Download the disk image for your Mac from the
+   [latest release](https://github.com/nikhil-kunapareddy/resumap/releases/latest):
+   `Resumap-<version>-macos-arm64.dmg` for Apple Silicon (M1 and later),
+   `Resumap-<version>-macos-x86_64.dmg` for Intel.
+2. Open it, drag **Resumap** onto **Applications**, and open it from there.
+3. The first time, macOS says it cannot check the app, because it is not signed
+   with an Apple Developer ID. Open **System Settings > Privacy & Security**,
+   scroll down, click **Open Anyway** and confirm. You only do this once.
+4. Resumap opens in your browser. Open **Settings** (top right) and choose who
+   answers: Claude Code, Codex or pi if one is installed and signed in, or
+   paste an Anthropic API key.
+
+Opening the app again brings the page back, and **Quit** in the top bar stops
+it. Resumes, jobs and exports live in `~/Library/Application Support/Resumap`;
+a `.env` placed there works like the one described below.
+
+To build the app yourself, run `./packaging/build_macos.sh` (needs
+[uv](https://docs.astral.sh/uv/)). It writes `dist/Resumap.app`, plus the
+`.dmg` and `.zip` to hand out; `./packaging/smoke_test.sh dist/<name>.dmg`
+then checks the image the way a first launch would. PyInstaller builds for the
+OS and chip it runs on, so a build from an Apple Silicon Mac runs on Apple
+Silicon only. Releases are built by CI for both chips (CONTRIBUTING.md,
+"Releasing").
+
+## Run from source
 
 ```bash
-uv sync                      # or: python3 -m venv .venv && .venv/bin/pip install -e .
-cp .env.example .env         # then pick a backend, below
-python3 run.py
+uv run run.py                # or: python3 -m venv .venv && .venv/bin/pip install -e . && python3 run.py
 ```
 
-`run.py` re-execs into `.venv` automatically, so you never need to activate it.
-The browser opens at http://127.0.0.1:8000. `--no-browser` suppresses that.
+The first run creates `.venv` from `uv.lock`; after that `run.py` re-execs into
+it, so you never need to activate it. The browser opens at
+http://127.0.0.1:8000 (`--no-browser` suppresses that). Choose a backend in
+Settings. A `.env` (copy `.env.example`) is optional, for defaults and overrides.
 
 ## Choosing a backend
 
-`RESUMAP_BACKEND` in `.env` decides who serves the model calls. Both produce
-the same validated structures, so you can switch at any time by restarting.
+Settings (top right) decides who serves the model calls; `RESUMAP_BACKEND` in
+`.env` is only the default until you choose. Every backend produces the same
+validated structures, so you can switch at any time.
 
 | | `api` (default) | `claude_code` |
 |---|---|---|
-| Credentials | `ANTHROPIC_API_KEY` in `.env` | whatever your local Claude Code install is signed in with |
+| Credentials | a key pasted in Settings, or `ANTHROPIC_API_KEY` in `.env` | whatever your local Claude Code install is signed in with |
 | Cost | billed per token | spends your Claude subscription's rate limits, shared with interactive Claude Code use |
 | Needs | a key from https://console.anthropic.com/settings/keys | Claude Code installed and signed in (`claude` on your PATH, or set `RESUMAP_CLAUDE_CLI`) |
 
@@ -247,11 +276,13 @@ text rather than the picture:
 ## Project layout
 
 ```
-run.py                    launcher (re-execs into .venv, opens the browser)
+run.py                    runs a checkout (re-execs into .venv, opens the browser)
 pyproject.toml            dependencies and tool config (locked in uv.lock)
+packaging/                the double-click app: PyInstaller spec, entry script, build_macos.sh
 backend/
   resumap/
     main.py               create_app(): wires everything below into one FastAPI app
+    launcher.py           serve() for run.py and the app; the app's double-click launcher
     config.py             env config; Paths (where an instance keeps its files)
     obs.py                structured logging, cost accounting, prompt archive
     api/                  HTTP only
@@ -298,7 +329,9 @@ cd backend && ../.venv/bin/uvicorn resumap.main:app --reload
 The only paths that cross the line are `FRONTEND_DIR` in `backend/resumap/config.py`
 and the `app.mount` at the end of `create_app` in `backend/resumap/main.py`. Everything else the
 backend touches (`.env`, `data/`) is addressed from the project root, so a
-future move of either half is a two-line change.
+future move of either half is a two-line change. The packaged app has no
+project root: there the UI comes from inside the bundle and `.env` and the data
+from the user's folder (`config.FROZEN`).
 
 ## Logging
 

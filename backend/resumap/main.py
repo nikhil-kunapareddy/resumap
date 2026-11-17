@@ -15,20 +15,21 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from . import obs
-from .api import errors
+from .api import errors, guard
 from .api.routers import ALL as ROUTERS
 from .api.schemas import ErrorOut
 from .config import (
     BACKEND,
-    BASE_DIR,
     CLAUDE_CLI,
     CODEX_CLI,
     DEFAULT_FIRST_NAME,
     DOTENV_KEYS,
     FRONTEND_DIR,
+    HOST,
     LOG_LEVEL,
     MODEL,
     PI_CLI,
+    WORK_DIR,
     Paths,
     api_key,
 )
@@ -42,8 +43,7 @@ async def lifespan(app: FastAPI):
     services: Services = app.state.services
     services.paths.ensure()
     obs.setup(services.paths.logs, LOG_LEVEL)
-    services.store.init()
-    services.settings.apply_saved()
+    services.start()
     registry = services.gateway.registry
     obs.event(
         "app.start",
@@ -53,8 +53,8 @@ async def lifespan(app: FastAPI):
         data_dir=obs.path_str(services.paths.uploads.parent),
         log_dir=obs.path_str(services.paths.logs),
         log_level=LOG_LEVEL,
-        prompts_archived=obs._prompts_enabled(),
-        text_in_logs=obs._log_text_enabled(),
+        prompts_archived=obs.prompts_enabled(),
+        text_in_logs=obs.log_text_enabled(),
         resumes=len(services.store.resumes.all()),
     )
     yield
@@ -114,7 +114,7 @@ def create_app(paths: Paths | None = None, registry: BackendRegistry | None = No
         codex_cli=CODEX_CLI,
         pi_cli=PI_CLI,
         dotenv_keys=DOTENV_KEYS,
-        cwd=BASE_DIR,
+        cwd=WORK_DIR,
     )
     gateway = ModelGateway(registry, PromptStore(), paths.logs)
     services = Services.build(
@@ -133,6 +133,8 @@ def create_app(paths: Paths | None = None, registry: BackendRegistry | None = No
         responses={422: {"model": ErrorOut, "description": "Invalid request"}},
     )
     app.state.services = services
+    # Installed before the request log, which is outermost, so refusals are logged too.
+    guard.install(app, guard.trusted_hosts(HOST))
     app.middleware("http")(_log_requests)
     errors.install(app)
     for router in ROUTERS:

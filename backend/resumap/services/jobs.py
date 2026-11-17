@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 from .. import obs
+from ..config import Paths
 from ..domain import BoxMode, JobSummary, RewriteMode
-from ..llm import BackendUnavailable, ModelGateway
+from ..llm import ModelGateway
 from ..storage import Store
-from .base import Service
-from .errors import Invalid, Unavailable
+from .base import ModelService
+from .errors import Invalid
 from .results import BoxModeSaved, JobCreated, JobDetail, MappingSaved, Ok, PointsKept
 from .resumes import resume_out
 
 
-class JobService(Service):
-    def __init__(self, store: Store, gateway: ModelGateway) -> None:
-        super().__init__(store)
-        self.gateway = gateway
+class JobService(ModelService):
+    def __init__(self, store: Store, gateway: ModelGateway, paths: Paths) -> None:
+        super().__init__(store, gateway)
+        self.paths = paths
 
     def all(self, resume_id: int | None = None) -> list[JobSummary]:
         return self.store.jobs.all(resume_id)
@@ -25,10 +26,9 @@ class JobService(Service):
         if len(text.strip()) < 40:
             raise Invalid("That job description looks too short to parse.")
 
-        try:
-            parsed = await self.gateway.parse_jd(text)
-        except BackendUnavailable as exc:
-            raise Unavailable(str(exc)) from exc
+        # Never raises for a missing backend: the points come from parsing/jd.py
+        # and only their labels need a model.
+        parsed = await self.gateway.parse_jd(text)
 
         if not parsed["points"]:
             raise Invalid("Could not find any requirements in that job description.")
@@ -47,7 +47,7 @@ class JobService(Service):
             role=parsed["role"],
             points=parsed["points"],
             mode=mode,
-            source=parsed.get("source", "claude"),
+            source=parsed["source"],
             warning=parsed.get("warning"),
         )
 
@@ -84,6 +84,8 @@ class JobService(Service):
 
     def delete(self, job_id: int) -> Ok:
         self.store.jobs.delete(job_id)
+        # The preview is a rendered, tailored resume; it goes with its job.
+        self.paths.preview(job_id).unlink(missing_ok=True)
         return Ok()
 
     def keep_points(self, job_id: int, keep_ids: list[str]) -> PointsKept:

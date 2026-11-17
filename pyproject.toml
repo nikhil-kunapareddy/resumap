@@ -33,12 +33,21 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/nikhil-kunapareddy/resumap"
+Releases = "https://github.com/nikhil-kunapareddy/resumap/releases"
+Issues = "https://github.com/nikhil-kunapareddy/resumap/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "httpx2>=2.0",      # FastAPI's TestClient
     "ruff>=0.6",
     "mypy>=1.11",
+]
+# Builds the double-click app: packaging/build_macos.sh
+app = [
+    "pyinstaller>=6.10",
 ]
 
 # Resumap runs from a checkout: the UI in frontend/ and the data in data/ sit

@@ -28,16 +28,12 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import tempfile
 from collections.abc import Mapping
-from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from .base import Backend, Completion, Effort, Usage, cli_env, run_cli
-
-TIMEOUT_S = 300
+from .base import CliBackend, Completion, Effort, Usage, cli_env, json_lines, run_cli, stderr_tail
 
 # Resumap's effort levels onto pi's --thinking levels.
 THINKING = {"low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "xhigh"}
@@ -56,11 +52,7 @@ def _final_message(stdout: str) -> tuple[dict, str | None]:
     """The last assistant message and the session id from pi's JSON event stream."""
     message: dict = {}
     session = None
-    for line in stdout.splitlines():
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for ev in json_lines(stdout):
         kind = ev.get("type")
         if kind == "session":
             session = ev.get("id")
@@ -106,22 +98,17 @@ def _text(message: dict) -> str:
     )
 
 
-class PiBackend(Backend):
+class PiBackend(CliBackend):
     name = "pi"
     label = "Pi"
+    binary = "pi"
     concurrency = 2
 
     def __init__(self, cli_path: str | None, dotenv_keys: Mapping[str, str]) -> None:
         """No default model: pi uses its own configured one unless the settings
         panel names a ``provider/model``. `cli_path` is RESUMAP_PI_CLI, if set."""
-        super().__init__("")
-        self._cli = cli_path
+        super().__init__("", cli_path)
         self._dotenv_keys = dotenv_keys
-
-    def _cli_path(self) -> str | None:
-        if self._cli:
-            return self._cli if Path(self._cli).exists() else None
-        return shutil.which("pi")
 
     def unavailable(self) -> str | None:
         if self._cli_path() is None:
@@ -157,13 +144,10 @@ class PiBackend(Backend):
         # a tag, but a leading newline makes that impossible regardless.
         cmd.append("\n" + prompt)
         with tempfile.TemporaryDirectory(prefix="resumap-pi-") as tmp:
-            code, stdout, stderr = await run_cli(
-                cmd, None, cwd=tmp, env=cli_env(self._dotenv_keys), timeout=TIMEOUT_S
-            )
+            code, stdout, stderr = await run_cli(cmd, None, cwd=tmp, env=cli_env(self._dotenv_keys))
         message, session = _final_message(stdout)
         if not message:
-            tail = (stderr.strip().splitlines() or ["no output"])[-1]
-            raise RuntimeError(f"Pi returned no answer (exit {code}): {tail}")
+            raise RuntimeError(f"Pi returned no answer (exit {code}): {stderr_tail(stderr)}")
         if message.get("stopReason") == "error":
             where = "/".join(x for x in (message.get("provider"), message.get("model")) if x)
             raise RuntimeError(
@@ -181,9 +165,7 @@ class PiBackend(Backend):
         max_tokens: int,
         effort: Effort,
     ) -> Completion:
-        cli = self._cli_path()
-        if cli is None:
-            raise RuntimeError(self.unavailable() or "pi not found")
+        cli = self._require_cli()
         thinking = THINKING.get(effort, "medium")
         full_system = system + JSON_RULES.format(
             schema=json.dumps(schema.model_json_schema(), separators=(",", ":"))

@@ -9,12 +9,11 @@ mid-clause, so the joining rules live in one place.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 # End of a sentence or a self-contained clause.
 TERMINATOR_RE = re.compile(r"[.!?][\"')\]]?\s*$")
 
-# A line ending on one of these is unfinished: the thought continues on the
-# next line. Trailing punctuation that cannot end a sentence counts too.
 # Cannot end an English sentence, so a line ending here is certainly cut off
 # and the word is safe to remove when repairing a fragment.
 HARD_DANGLING = (
@@ -118,7 +117,6 @@ SOFT_DANGLING = (
     # almost certainly cut off ("the ingestion path now handling"). Detection
     # only -- peeling them would mangle the sentence.
     "handling",
-    "including",
     "spanning",
     "processing",
     "covering",
@@ -144,6 +142,8 @@ SOFT_DANGLING = (
     "delivering",
 )
 
+# A line ending on one of these is unfinished: the thought continues on the
+# next line. Trailing punctuation that cannot end a sentence counts too.
 DANGLING_WORDS = HARD_DANGLING + SOFT_DANGLING
 DANGLING_RE = re.compile(
     r"(?:\b(?:" + "|".join(DANGLING_WORDS) + r")\b|[,;:&+/\-–—])\s*$",
@@ -153,6 +153,11 @@ DANGLING_RE = re.compile(
 
 # Trailing punctuation that cannot end a sentence (comma, semicolon, dashes...).
 PUNCT_TAIL_RE = re.compile("[,;:&+/" + "\u2013\u2014" + "-]+$")
+
+# One hard-dangling word at the very end, with the space before it. Only
+# HARD_DANGLING is peeled: removing a soft preposition would turn "models the
+# ML engineers depend on" into "... depend".
+HARD_TAIL_RE = re.compile(r"(?:^|\s+)\b(?:" + "|".join(HARD_DANGLING) + r")\b$", re.I)
 
 
 def is_terminated(text: str) -> bool:
@@ -207,13 +212,10 @@ def ensure_stop(text: str) -> str:
     # own. A full stop placed straight after "and" would only make the fragment
     # look deliberate. Loop, because fragments end on runs like
     # "applications, to" that need two passes.
-    # Only HARD_DANGLING is peeled: removing a soft preposition would turn
-    # "models the ML engineers depend on" into "... depend".
-    dangling_tail = re.compile(r"(?:^|\s+)\b(?:" + "|".join(HARD_DANGLING) + r")\b$", re.I)
     for _ in range(8):
         before = t
         t = PUNCT_TAIL_RE.sub("", t).strip()
-        t = dangling_tail.sub("", t).strip()
+        t = HARD_TAIL_RE.sub("", t).strip()
         if t == before:
             break
     if not t:
@@ -221,16 +223,15 @@ def ensure_stop(text: str) -> str:
     return t if is_terminated(t) else t + "."
 
 
-def unwrap(text: str, is_list_item=None, is_heading=None) -> str:
+def unwrap(
+    text: str, *, is_list_item: Callable[[str], bool], is_heading: Callable[[str], bool]
+) -> str:
     """Rejoin hard-wrapped lines in pasted plain text.
 
     A pasted job description usually arrives wrapped at a fixed width, which
     turns one requirement into three fragments. Blank lines, list markers and
     headings all start a fresh line and are never absorbed.
     """
-    is_list_item = is_list_item or (lambda _s: False)
-    is_heading = is_heading or (lambda _s: False)
-
     out: list[str] = []
     for raw in text.splitlines():
         line = raw.rstrip()
