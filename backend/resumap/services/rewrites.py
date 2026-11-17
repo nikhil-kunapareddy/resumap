@@ -4,31 +4,22 @@ from __future__ import annotations
 
 from .. import obs
 from ..domain import Job, Rewrite, RewriteStatus
-from ..llm import ModelGateway
 from ..rendering.pdfgen import budgets
-from ..storage import Store
-from .base import Service, stored_meta
+from .base import ModelService, stored_meta
 from .documents import entry_context, placements
-from .errors import Invalid, Unavailable
+from .errors import Invalid
 from .results import PreviewKind, PromptPreview, TransformOut, TransformResult
 
 
-class RewriteService(Service):
-    def __init__(self, store: Store, gateway: ModelGateway) -> None:
-        super().__init__(store)
-        self.gateway = gateway
-
+class RewriteService(ModelService):
     async def transform(self, job_id: int, block_ids: list[str] | None, extra: str) -> TransformOut:
         """Rewrite every mapped box, or only `block_ids` for a re-roll.
 
         A box that fails is reported in `results` and keeps whatever rewrite it
         had; the rest are saved together.
         """
-        job = self._job(job_id)
-        resume = self._resume(job.resume_id)
-        why = await self.gateway.astatus()
-        if why:
-            raise Unavailable(why)
+        job, resume = self._job_and_resume(job_id)
+        await self._require_backend()
 
         doc = resume.doc.as_dict()
         blocks = {b["id"]: b for b in doc["blocks"]}
@@ -86,8 +77,7 @@ class RewriteService(Service):
 
     def preview(self, job_id: int, block_id: str) -> PromptPreview:
         """The exact system prompt and message Transform would send for one box."""
-        job = self._job(job_id)
-        resume = self._resume(job.resume_id)
+        job, resume = self._job_and_resume(job_id)
         calls = self._calls(job, resume.doc.as_dict(), [block_id], "")
         if not calls:
             raise Invalid("That box is not mapped to any JD point yet.")

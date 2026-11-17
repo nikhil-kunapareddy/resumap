@@ -81,7 +81,9 @@ class ResumeService(Service):
             person=doc.get("name", ""),
             doc=doc,
         )
-        written = write_parse_report(self.paths.logs, resume.id, resume_label, doc)
+        written = write_parse_report(
+            self.paths.parse_report(resume.id), resume.id, resume_label, doc
+        )
         obs.event(
             "resume.stored",
             resume_id=resume.id,

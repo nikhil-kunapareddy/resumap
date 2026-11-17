@@ -10,7 +10,7 @@ from ..domain import ChatMessage, ChatRole, Layout, Rewrite, RewriteStatus
 from ..llm import BackendUnavailable, ModelGateway
 from ..rendering.pdfgen import clean_layout
 from ..storage import Store
-from .base import Service, stored_meta
+from .base import ModelService, stored_meta
 from .documents import left_text
 from .errors import Conflict, Invalid, NotFound, Unavailable, UpstreamFailed
 from .exports import ExportService
@@ -59,10 +59,9 @@ def _applied(m: ChatMessage) -> bool:
     )
 
 
-class CorrectionService(Service):
+class CorrectionService(ModelService):
     def __init__(self, store: Store, gateway: ModelGateway, exports: ExportService) -> None:
-        super().__init__(store)
-        self.gateway = gateway
+        super().__init__(store, gateway)
         self.exports = exports
 
     def state(self, job_id: int) -> ChatState:
@@ -95,11 +94,8 @@ class CorrectionService(Service):
         the review step with their substitutions, like a hand edit. The state each
         one replaced is kept on the reply, which is what Undo restores.
         """
-        job = self._job(job_id)
-        self._resume(job.resume_id)  # a missing resume is a 404, before any 503
-        why = await self.gateway.astatus()
-        if why:
-            raise Unavailable(why)
+        job, _resume = self._job_and_resume(job_id)
+        await self._require_backend()
         message = message.strip()
         if not message:
             raise Invalid("Type what you want changed first.")

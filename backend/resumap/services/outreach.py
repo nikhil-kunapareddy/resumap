@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from .. import obs
 from ..domain import OutreachExample, OutreachKind, Rewrite
-from ..llm import BackendUnavailable, ModelGateway
+from ..llm import BackendUnavailable
 from ..llm.outreach import LINKEDIN_LIMIT
-from ..storage import Store
-from .base import Service
+from .base import ModelService
 from .documents import render_doc
 from .errors import Invalid, NotFound, Unavailable, UpstreamFailed
 from .results import Ok, OutreachOut
@@ -42,21 +41,14 @@ def highlights(doc: dict, rewrites: dict[str, Rewrite], mappings: dict) -> list[
     return (picked or spare)[:HIGHLIGHT_LIMIT]
 
 
-class OutreachService(Service):
-    def __init__(self, store: Store, gateway: ModelGateway) -> None:
-        super().__init__(store)
-        self.gateway = gateway
-
+class OutreachService(ModelService):
     def get(self, job_id: int) -> OutreachOut:
         self._job(job_id)
         return OutreachOut(outreach=self.store.outreach.get(job_id))
 
     async def draft(self, job_id: int, recruiter: str, extra: str) -> OutreachOut:
-        job = self._job(job_id)
-        resume = self._resume(job.resume_id)
-        why = await self.gateway.astatus()
-        if why:
-            raise Unavailable(why)
+        job, resume = self._job_and_resume(job_id)
+        await self._require_backend()
 
         rewrites = self.store.rewrites.for_job(job_id)
         quoted = highlights(

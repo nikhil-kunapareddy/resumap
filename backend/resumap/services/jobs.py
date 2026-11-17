@@ -7,16 +7,15 @@ from ..config import Paths
 from ..domain import BoxMode, JobSummary, RewriteMode
 from ..llm import ModelGateway
 from ..storage import Store
-from .base import Service
+from .base import ModelService
 from .errors import Invalid
 from .results import BoxModeSaved, JobCreated, JobDetail, MappingSaved, Ok, PointsKept
 from .resumes import resume_out
 
 
-class JobService(Service):
+class JobService(ModelService):
     def __init__(self, store: Store, gateway: ModelGateway, paths: Paths) -> None:
-        super().__init__(store)
-        self.gateway = gateway
+        super().__init__(store, gateway)
         self.paths = paths
 
     def all(self, resume_id: int | None = None) -> list[JobSummary]:
