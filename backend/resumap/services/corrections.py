@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from .. import obs
@@ -10,7 +11,7 @@ from ..llm import BackendUnavailable, ModelGateway
 from ..rendering.pdfgen import clean_layout
 from ..storage import Store
 from .base import Service, stored_meta
-from .documents import left_text, render_doc
+from .documents import left_text
 from .errors import Conflict, Invalid, NotFound, Unavailable, UpstreamFailed
 from .exports import ExportService
 from .results import ChatMessageOut, ChatMetaOut, ChatState
@@ -95,7 +96,7 @@ class CorrectionService(Service):
         one replaced is kept on the reply, which is what Undo restores.
         """
         job = self._job(job_id)
-        resume = self._resume(job.resume_id)
+        self._resume(job.resume_id)  # a missing resume is a 404, before any 503
         why = await self.gateway.astatus()
         if why:
             raise Unavailable(why)
@@ -103,15 +104,14 @@ class CorrectionService(Service):
         if not message:
             raise Invalid("Type what you want changed first.")
 
-        _out, _name, fit = self.exports.build(job_id, preview=True)
-        rewrites = self.store.rewrites.for_job(job_id)
-        doc = render_doc(resume.doc.as_dict(), rewrites)
-        layout = fit["layout"]
+        # A full layout pass, so off the event loop.
+        page = await asyncio.to_thread(self.exports.measure, job)
+        doc, fit = page.doc, page.fit
         history = self.store.chat.for_job(job_id)
         try:
             rev = await self.gateway.revise_pdf(
-                blocks=chat_blocks(doc, rewrites, fit["blocks"]),
-                layout=layout,
+                blocks=chat_blocks(doc, page.rewrites, fit["blocks"]),
+                layout=fit["layout"],
                 fit=fit,
                 geometry=doc.get("geometry") or {},
                 role=job.role,
@@ -127,9 +127,13 @@ class CorrectionService(Service):
 
         blocks = {b["id"]: b for b in doc.get("blocks", [])}
         before: dict[str, dict[str, Any] | None] = {}
-        new_layout = clean_layout({**layout, **rev["layout"]})
-        changed = {k: v for k, v in new_layout.items() if v != layout.get(k)}
         with self.store.transaction():
+            # Read again inside the write: an Undo committed while the model was
+            # answering is what this turn builds on and records as replaced.
+            rewrites = self.store.rewrites.for_job(job_id)
+            layout = clean_layout(self.store.layouts.get(job_id))
+            new_layout = clean_layout({**layout, **rev["layout"]})
+            changed = {k: v for k, v in new_layout.items() if v != layout.get(k)}
             for e in rev["edits"]:
                 bid = e["block_id"]
                 old = rewrites.get(bid)

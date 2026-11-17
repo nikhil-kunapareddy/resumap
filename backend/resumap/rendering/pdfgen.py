@@ -809,50 +809,35 @@ def _refine(loose: tuple, tight: tuple, pages_at, rounds: int = 6) -> tuple:
 WRAP_WASTE = 4
 
 
-def _line_stats(doc: dict, layout: dict | None) -> dict[str, dict]:
-    r = ResumeRenderer(doc, layout=layout)
-    r.render(None, {})
-    return r.stats
-
-
-def _block_budgets(stats: dict[str, dict]) -> dict[str, int]:
-    return {
-        bid: max(0, st["source_lines"] * (st["chars_per_line"] - WRAP_WASTE))
-        for bid, st in stats.items()
-    }
-
-
-def _bullet_budget(doc: dict, stats: dict[str, dict], lines: int) -> int:
-    bullets = {b["id"] for b in doc.get("blocks") or [] if b["kind"] == "bullet"}
-    cpl = sorted(st["chars_per_line"] for bid, st in stats.items() if bid in bullets)
-    return lines * (cpl[len(cpl) // 2] - WRAP_WASTE) if cpl else 0
-
-
-def line_budget(doc: dict, layout: dict | None = None) -> dict[str, int]:
-    """Characters each block can hold without taking more lines than the source gave it.
-
-    Measured with the renderer's own metrics at full size, so a rewrite held to
-    this lands on the same number of lines the original occupied.
-    """
-    return _block_budgets(_line_stats(doc, layout))
-
-
-def new_bullet_budget(doc: dict, layout: dict | None = None, lines: int = 2) -> int:
-    """Characters a brand-new bullet may use to stay within `lines` lines."""
-    return _bullet_budget(doc, _line_stats(doc, layout), lines)
+# A brand-new bullet gets about this many lines of a typical bullet.
+NEW_BULLET_LINES = 2
 
 
 class Budgets(NamedTuple):
-    """Both length budgets, from one measuring pass."""
+    """How many characters a rewrite may use without taking more lines.
 
-    lines: dict[str, int]  # per block, as line_budget
-    new_bullet: int  # as new_bullet_budget with its default two lines
+    Measured with the renderer's own metrics at full size, so a rewrite held to
+    its budget lands on the same number of lines the original occupied.
+    """
+
+    lines: dict[str, int]  # per block: what the source's own lines hold
+    new_bullet: int  # a brand-new bullet, NEW_BULLET_LINES of a median bullet
 
 
 def budgets(doc: dict, layout: dict | None = None) -> Budgets:
-    """line_budget and new_bullet_budget together, for the price of one render."""
-    stats = _line_stats(doc, layout)
-    return Budgets(_block_budgets(stats), _bullet_budget(doc, stats, 2))
+    """Every block's budget and a new bullet's, from one measuring pass."""
+    r = ResumeRenderer(doc, layout=layout)
+    r.render(None, {})
+    stats = r.stats
+    bullets = {b["id"] for b in doc.get("blocks") or [] if b["kind"] == "bullet"}
+    cpl = sorted(st["chars_per_line"] for bid, st in stats.items() if bid in bullets)
+    return Budgets(
+        lines={
+            bid: max(0, st["source_lines"] * (st["chars_per_line"] - WRAP_WASTE))
+            for bid, st in stats.items()
+        },
+        new_bullet=NEW_BULLET_LINES * (cpl[len(cpl) // 2] - WRAP_WASTE) if cpl else 0,
+    )
 
 
 # ---------------------------------------------------------------------------

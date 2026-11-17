@@ -17,8 +17,6 @@ from resumap.rendering.pdfgen import (
     clean_layout,
     export_filename,
     insert_blocks,
-    line_budget,
-    new_bullet_budget,
     render_resume,
 )
 from resumap.rendering.selfcheck import verify_pdf
@@ -182,7 +180,7 @@ def test_without_a_path_the_fit_is_the_same_and_nothing_is_written(doc, tmp_path
 
 
 def test_line_budget_covers_every_block_and_tracks_its_length(doc):
-    budget = line_budget(doc)
+    budget = budgets(doc).lines
     assert set(budget) == {b["id"] for b in doc["blocks"]}
     for b in doc["blocks"]:
         if b["mappable"]:
@@ -195,21 +193,14 @@ def test_line_budget_covers_every_block_and_tracks_its_length(doc):
     "original's own length (bul009: 102 < 103)",
 )
 def test_every_untouched_point_fits_its_own_line_budget(doc):
-    budget = line_budget(doc)
+    budget = budgets(doc).lines
     assert all(len(b["text"]) <= budget[b["id"]] for b in doc["blocks"] if b["mappable"])
 
 
 def test_a_new_bullet_gets_about_two_lines(doc):
-    budget = new_bullet_budget(doc)
-    one_line = min(line_budget(doc)[bid] for bid in _ids(doc, "bullet"))
+    budget = budgets(doc).new_bullet
+    one_line = min(budgets(doc).lines[bid] for bid in _ids(doc, "bullet"))
     assert one_line < budget < 3 * one_line
-
-
-@pytest.mark.parametrize("layout", [None, {"font": 0.9}])
-def test_budgets_gives_both_budgets_from_one_pass(doc, layout):
-    both = budgets(doc, layout)
-    assert both.lines == line_budget(doc, layout)
-    assert both.new_bullet == new_bullet_budget(doc, layout)
 
 
 # -- inserted bullets -------------------------------------------------------

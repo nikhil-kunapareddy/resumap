@@ -5,7 +5,7 @@ from __future__ import annotations
 from .. import obs
 from ..domain import Job, Rewrite, RewriteStatus
 from ..llm import ModelGateway
-from ..rendering.pdfgen import line_budget, new_bullet_budget
+from ..rendering.pdfgen import budgets
 from ..storage import Store
 from .base import Service, stored_meta
 from .documents import entry_context, placements
@@ -105,10 +105,12 @@ class RewriteService(Service):
         mappings = self.store.mappings.for_job(job.id)
         blocks = {b["id"]: b for b in doc["blocks"]}
         by_point = {p.id: p.model_dump(mode="json") for p in job.points}
-        layout = self.store.layouts.get(job.id)
-        budget = line_budget(doc, layout)
+        # Measured once for the whole batch: each is a full layout pass.
+        budget = budgets(doc, self.store.layouts.get(job.id))
         exps = {e.key: e.model_dump(mode="json") for e in self.store.experiences.all()}
         box_modes = self.store.mappings.box_modes(job.id)
+        spots = placements(doc)
+        examples = [b["text"] for b in doc["blocks"] if b["mappable"]][:3]
         out = []
         for bid in block_ids or list(mappings.keys()):
             pts = [by_point[p] for p in mappings.get(bid, []) if p in by_point]
@@ -124,11 +126,11 @@ class RewriteService(Service):
                             "jd_points": pts,
                             "role": job.role,
                             "company": job.company,
-                            "placements": placements(doc),
-                            "examples": [b["text"] for b in doc["blocks"] if b["mappable"]][:3],
+                            "placements": spots,
+                            "examples": examples,
                             "mode": job.mode,
                             "extra": extra,
-                            "max_chars": new_bullet_budget(doc, layout),
+                            "max_chars": budget.new_bullet,
                         },
                     }
                 )
@@ -148,7 +150,7 @@ class RewriteService(Service):
                             "role": job.role,
                             "company": job.company,
                             "extra": extra,
-                            "max_chars": budget.get(bid, 0),
+                            "max_chars": budget.lines.get(bid, 0),
                         },
                     }
                 )
@@ -165,7 +167,7 @@ class RewriteService(Service):
                             "company": job.company,
                             "mode": job.mode,
                             "extra": extra,
-                            "max_chars": budget.get(bid, 0),
+                            "max_chars": budget.lines.get(bid, 0),
                         },
                     }
                 )
