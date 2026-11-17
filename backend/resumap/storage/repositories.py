@@ -58,6 +58,13 @@ def _row(r: sqlite3.Row | None) -> dict[str, Any] | None:
     return dict(r) if r is not None else None
 
 
+def _with_meta(r: sqlite3.Row) -> dict[str, Any]:
+    """A row as a dict, with its meta_json column decoded into `meta`."""
+    d = dict(r)
+    d["meta"] = json.loads(d.pop("meta_json") or "{}")
+    return d
+
+
 def _created(entity: T | None) -> T:
     """The row an INSERT just wrote, read back in the same transaction."""
     if entity is None:
@@ -244,9 +251,7 @@ class RewriteRepository(Repository):
 
     @staticmethod
     def _model(r: sqlite3.Row) -> Rewrite:
-        d = dict(r)
-        d["meta"] = json.loads(d.pop("meta_json") or "{}")
-        return Rewrite.model_validate(d)
+        return Rewrite.model_validate(_with_meta(r))
 
     def save(
         self,
@@ -276,6 +281,14 @@ class RewriteRepository(Repository):
                 (status, time.time(), job_id, block_id),
             )
 
+    def accept_pending(self, job_id: int) -> int:
+        """Accept every pending rewrite of the job at once. Returns how many."""
+        with self._db.connect() as conn:
+            return conn.execute(
+                "UPDATE rewrites SET status=?, updated_at=? WHERE job_id=? AND status=?",
+                (RewriteStatus.ACCEPTED, time.time(), job_id, RewriteStatus.PENDING),
+            ).rowcount
+
     def delete(self, job_id: int, block_id: str) -> None:
         with self._db.connect() as conn:
             conn.execute("DELETE FROM rewrites WHERE job_id=? AND block_id=?", (job_id, block_id))
@@ -289,11 +302,8 @@ class RewriteRepository(Repository):
 class OutreachRepository(Repository):
     def get(self, job_id: int) -> OutreachDraft | None:
         with self._db.connect() as conn:
-            r = _row(conn.execute("SELECT * FROM outreach WHERE job_id=?", (job_id,)).fetchone())
-        if r is None:
-            return None
-        r["meta"] = json.loads(r.pop("meta_json") or "{}")
-        return OutreachDraft.model_validate(r)
+            r = conn.execute("SELECT * FROM outreach WHERE job_id=?", (job_id,)).fetchone()
+        return OutreachDraft.model_validate(_with_meta(r)) if r is not None else None
 
     def save(
         self,
@@ -423,12 +433,7 @@ class ChatRepository(Repository):
             rows = conn.execute(
                 "SELECT * FROM chat WHERE job_id=? ORDER BY id", (job_id,)
             ).fetchall()
-        out = []
-        for r in rows:
-            d = dict(r)
-            d["meta"] = json.loads(d.pop("meta_json") or "{}")
-            out.append(ChatMessage.model_validate(d))
-        return out
+        return [ChatMessage.model_validate(_with_meta(r)) for r in rows]
 
     def add(self, job_id: int, role: ChatRole, text: str, meta: dict[str, Any]) -> int:
         with self._db.connect() as conn:

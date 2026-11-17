@@ -106,8 +106,7 @@ class ResumeOut(Envelope):
     blocks: list[Block]
 
 
-class ExperienceDeleted(Envelope):
-    ok: bool = True
+class ExperienceDeleted(Ok):
     mappings: int
     rewrites: int
 
@@ -140,21 +139,18 @@ class JobDetail(Envelope):
     resume: ResumeOut | None
 
 
-class PointsKept(Envelope):
-    ok: bool = True
+class PointsKept(Ok):
     points: list[JDPoint]
     dropped: list[str]
     unwired: int
 
 
-class MappingSaved(Envelope):
-    ok: bool = True
+class MappingSaved(Ok):
     block_id: str
     point_ids: list[str]
 
 
-class BoxModeSaved(Envelope):
-    ok: bool = True
+class BoxModeSaved(Ok):
     block_id: str
     mode: BoxMode
 

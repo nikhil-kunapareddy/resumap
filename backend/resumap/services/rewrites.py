@@ -230,10 +230,6 @@ class RewriteService(ModelService):
         return self._rewrite(job_id, block_id)
 
     def accept_all(self, job_id: int) -> dict[str, Rewrite]:
-        rws = self.store.rewrites.for_job(job_id)
-        pending = [bid for bid, rw in rws.items() if rw.status == RewriteStatus.PENDING]
-        with self.store.transaction():
-            for bid in pending:
-                self.store.rewrites.set_status(job_id, bid, RewriteStatus.ACCEPTED)
-        obs.event("review.accept_all", job_id=job_id, accepted=len(pending))
+        accepted = self.store.rewrites.accept_pending(job_id)
+        obs.event("review.accept_all", job_id=job_id, accepted=accepted)
         return self.store.rewrites.for_job(job_id)
