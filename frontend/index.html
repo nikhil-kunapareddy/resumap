@@ -8,7 +8,8 @@
   // Before first paint, so a dark theme never flashes light. app.js keeps it
   // in step with the settings panel and, for "system", with the OS.
   (function () {
-    var t = localStorage.getItem('resumap.theme') || 'system';
+    var t = 'system';
+    try { t = localStorage.getItem('resumap.theme') || t; } catch (e) { /* storage blocked */ }
     var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   })();
@@ -20,7 +21,7 @@
 
 <header class="topbar">
   <div class="brand">Resumap</div>
-  <nav class="steps" id="steps">
+  <nav class="steps">
     <button class="step" data-step="1"><b>1</b> Resume</button>
     <button class="step" data-step="2"><b>2</b> Job description</button>
     <button class="step" data-step="3"><b>3</b> Map</button>
@@ -97,11 +98,13 @@
     <div class="col">
       <h2>Reference resume</h2>
       <p class="hint">Upload once. It is stored locally and reused for every job you tailor.</p>
-      <label class="drop" id="drop">
+      <!-- A div, not a label: a label would open the picker natively as well
+           as through app.js, and some browsers then show it twice. -->
+      <div class="drop" id="drop">
         <input type="file" id="file" accept=".pdf,.docx,.txt,.md" hidden>
         <strong>Choose a file</strong> or drop it here
         <small>PDF, DOCX, TXT or MD &middot; text-based PDFs only</small>
-      </label>
+      </div>
       <div id="uploadMsg" class="msg"></div>
 
       <h3>Stored resumes</h3>
